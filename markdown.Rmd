@@ -1,0 +1,1530 @@
+---
+title: "Microarray analysis"
+author: "saradha venkatachapathy"
+date: "February 11, 2017"
+output: html_document
+---
+
+**Step1: Read in the normalised gene expression file,calculate the zscore, foldchanges and rank the gene expression profiles across samples**
+
+The "normalised_gene.csv" contains the normalised gene expression i.e, log2(Median expression of exons) of gene across 3 trials in the four samples. 
+
+First calculate the relative gene expression byof the calculating the Zscore: Mean of gene expression across the three trials. Then calculate the population mean. Then calculate the zscore as the difference between the Mean gene expression and the population mean expression divided by the Standard deviation of the mean gene expression across the samples. 
+
+Rank of each gene was calculated by just ordering the mean gene expression across the samples. Rank4>Rank3>Rank2>Rank1. Then combine the ranks as a string. Plot the frequency distribution of all the genes throughout the microarry to see the global profile. 
+```{r }
+# Read in the normalised gene expression file and then also
+normalised_gene <- read.csv("D:/saradha/Anindo/microarray_analysis/Final run/normalised_gene.csv")
+
+head(normalised_gene)
+
+# calculate median of the the three trials
+
+normalised_gene[,16]<-rowMeans(normalised_gene[,c(3,7,11)])
+normalised_gene[,17]<-rowMeans(normalised_gene[,c(4,8,12)])
+normalised_gene[,18]<-rowMeans(normalised_gene[,c(5,9,13)])
+normalised_gene[,19]<-rowMeans(normalised_gene[,c(6,10,14)])
+
+normalised_gene[,20]<-rowMeans(normalised_gene[,16:19])
+normalised_gene[,21]<-apply(normalised_gene[,16:19],1,sd) 
+
+normalised_gene[,22]<-(normalised_gene[,16]-normalised_gene[,20])/normalised_gene[,21]
+normalised_gene[,23]<-(normalised_gene[,17]-normalised_gene[,20])/normalised_gene[,21]
+normalised_gene[,24]<-(normalised_gene[,18]-normalised_gene[,20])/normalised_gene[,21]
+normalised_gene[,25]<-(normalised_gene[,19]-normalised_gene[,20])/normalised_gene[,21]
+
+normalised_gene[,26]<-normalised_gene[,17]/normalised_gene[,16]
+normalised_gene[,27]<-normalised_gene[,19]/normalised_gene[,18]
+normalised_gene[,28]<-normalised_gene[,16]/normalised_gene[,18]
+normalised_gene[,29]<-normalised_gene[,17]/normalised_gene[,19]
+normalised_gene[,30]<-normalised_gene[,17]/normalised_gene[,18]
+normalised_gene[,31]<-normalised_gene[,16]/normalised_gene[,19]
+
+
+colnames(normalised_gene)<-c("X","ENTREZID","Trial1 SC","Trial1 SC+TNF","Trial1 BR","Trial1 BR+TNF",
+                             "Trial2 SC","Trial2 SC+TNF","Trial2 BR","Trial2 BR+TNF",
+                             "Trial3 SC","Trial3 SC+TNF","Trial3 BR","Trial3 BR+TNF",
+                             "gene symbol","mean exp SC","mean exp SC+TNF","mean exp BR","mean exp BR+TNF",
+                             "population mean","population sd","zscore SC","zscore SC+TNF","zscore BR","zscore BR+TNF",
+                             "FC SC+TNF/SC","FC BR+TNF/BR","FC SC/BR","FC SC+TNF/BR+TNF","FC SC+TNF/BR","FC SC/BR+TNF")
+
+# function to return the rank of a vector
+
+calcRank <- function(x){
+  sorted <- x[order(x)]
+  ranks <- sapply(x, function(x) which(sorted==x))
+  return(rank(x))
+}
+
+# caculate the relative differential expression of each gene by getting the ranks
+
+normalised_gene[,32:35]<-0
+colnames(normalised_gene)[c(32:35)]<-c("Rank SC","Rank SC+TNF","Rank BR","Rank BR+TNF")
+
+for( i in 1:nrow(normalised_gene)){
+  normalised_gene[i,32:35]<-calcRank(normalised_gene[i,22:25])
+}
+
+# generating the string to represent the trend in gene expression
+
+for( i in 1:nrow(normalised_gene)){
+  normalised_gene[i,36]<-paste(normalised_gene[i,34],normalised_gene[i,35],normalised_gene[i,32],normalised_gene[i,33],sep="-")
+  t<-normalised_gene[i,c(34,35,32,33)]
+  names<-c("BR","BR+TNF","SC","SC+TNF")
+  t1<-names[order(t)]
+  normalised_gene[i,37]<-paste(t1[1],t1[2],t1[3],t1[4],sep="<")
+}
+
+head(normalised_gene)
+
+# plot the global trends of expression
+
+x<-as.data.frame(table(normalised_gene[,37]))
+x<-x[order(x[,2]),]
+
+par(mar=c(4,15,3,2))
+barplot(x[,2], main = "",horiz = T,las=1,names=x[,1],xlab="number of genes")
+box()
+
+
+#plot the frequency of rank as a stacked barblot
+counts<-as.data.frame(table(normalised_gene[,34]))
+counts[,2]<-counts[,2]/nrow(normalised_gene)
+counts[,3]<-as.data.frame(table(normalised_gene[,35]))[,2]/nrow(normalised_gene)
+counts[,4]<-as.data.frame(table(normalised_gene[,32]))[,2]/nrow(normalised_gene)
+counts[,5]<-as.data.frame(table(normalised_gene[,33]))[,2]/nrow(normalised_gene)
+colnames(counts)[c(2:5)]<-c("BR","BR+TNF","SC","SC+TNF")
+library(gplots)
+
+
+barplot(as.matrix(counts[,2:5]), las=1, xlim=c(0,6),col=redgreen(5),ylab="Fraction of the total number of genes")
+legend("bottomright",legend = c("Rank 4","Rank3","Rank2","Rank1"), fill = redgreen(5))
+box()
+```
+
+
+
+**Part2: NFkB gene target gene expression analysis**
+
+Plot the expression profile of nfkb target genes form different methods http://bioinfo.lifl.fr/NF-KB/
+```{r}
+
+nfkb_complilation <- read.csv("D:/saradha/Anindo/microarray_analysis/Final run/nfkb_complilation.csv", stringsAsFactors=FALSE)
+#nfkb was list was obtained from: http://bioinfo.lifl.fr/NF-KB/ Experiment humans
+library(gplots)
+nfkb_gene<-subset(normalised_gene,normalised_gene[,15] %in% nfkb_complilation[,1])
+nfkb_gene<-nfkb_gene[order(nfkb_gene[,24]),]
+
+par(font.axis=2,font.lab=2)
+x<-heatmap.2(as.matrix(nfkb_gene[,c(24,25,22,23)]), col=redgreen(75),
+             scale="none",key=T, symkey=T, Rowv=F,Colv=FALSE,cexRow=0.6,
+             trace='none',dendrogram="none",cexCol=0.7,srtCol =90,key.title=" ",
+             ylab = "",labRow = nfkb_gene[,15],labCol=c("BR","BR+TNF","SC","SC+TNF"),density.info="none",main="Experiment Human")
+
+par(font.axis=2,font.lab=2)
+x<-colSums(nfkb_gene[,c(24,25,22,23)])
+x_down<-min(x)-5
+x_up<-max(x)+5
+barplot(x,las=1,ylab="Summed Zscore",names =c("BR","BR+TNF","SC","SC+TNF"),ylim=c(x_down,x_up),main="Experiment Human")
+box()
+abline(h=0)
+
+#nfkb was list was obtained from: http://bioinfo.lifl.fr/NF-KB/ Experiment mouse
+nfkb_gene<-subset(normalised_gene,normalised_gene[,15] %in% nfkb_complilation[,2])
+nfkb_gene<-nfkb_gene[order(nfkb_gene[,24]),]
+
+par(font.axis=2,font.lab=2)
+x<-heatmap.2(as.matrix(nfkb_gene[,c(24,25,22,23)]), col=redgreen(75),
+             scale="none",key=T, symkey=T, Rowv=F,Colv=FALSE,cexRow=0.8,
+             trace='none',dendrogram="none",cexCol=0.7,srtCol =90,key.title=" ",
+             ylab = "",labRow = nfkb_gene[,15],labCol=c("BR","BR+TNF","SC","SC+TNF"),density.info="none",main="Experiment Mouse")
+
+par(font.axis=2,font.lab=2)
+x<-colSums(nfkb_gene[,c(24,25,22,23)])
+x_down<-min(x)-5
+x_up<-max(x)+5
+x<-colSums(nfkb_gene[,c(24,25,22,23)])
+barplot(x,las=1,ylab=" Summed Zscore",names =c("BR","BR+TNF","SC","SC+TNF"),ylim=c(x_down,x_up),main="Experiment mouse")
+box()
+abline(h=0)
+
+#nfkb was list was obtained from: http://bioinfo.lifl.fr/NF-KB/ experiment humans and mouse
+temp<-c(nfkb_complilation[,1],nfkb_complilation[,2])
+nfkb_gene<-subset(normalised_gene,normalised_gene[,15] %in% temp)
+nfkb_gene<-nfkb_gene[order(nfkb_gene[,24]),]
+
+par(font.axis=2,font.lab=2)
+x<-heatmap.2(as.matrix(nfkb_gene[,c(24,25,22,23)]), col=redgreen(75),
+             scale="none",key=F, symkey=T, Rowv=F,Colv=FALSE,cexRow=0.5,
+             trace='none',dendrogram="none",cexCol=0.7,srtCol =90,key.title=" ",
+             ylab = "",labRow = nfkb_gene[,15],labCol=c("BR","BR+TNF","SC","SC+TNF"),density.info="none",main="Experiment Human and mouse")
+
+par(font.axis=2,font.lab=2)
+x<-colSums(nfkb_gene[,c(24,25,22,23)])
+x_down<-min(x)-5
+x_up<-max(x)+5
+barplot(x,las=1,ylab="Summed Zscore",names =c("BR","BR+TNF","SC","SC+TNF"),ylim=c(x_down,x_up),main="Experiment Human and mouse")
+box()
+abline(h=0)
+
+#nfkb was list was obtained from: http://bioinfo.lifl.fr/NF-KB/ Putative humans
+nfkb_gene<-subset(normalised_gene,normalised_gene[,15] %in% nfkb_complilation[,3])
+nfkb_gene<-nfkb_gene[order(nfkb_gene[,24]),]
+
+par(font.axis=2,font.lab=2)
+x<-heatmap.2(as.matrix(nfkb_gene[,c(24,25,22,23)]), col=redgreen(75),
+             scale="none",key=T, symkey=T, Rowv=F,Colv=FALSE,cexRow=0.8,
+             trace='none',dendrogram="none",cexCol=0.7,srtCol =90,key.title=" ",
+             ylab = "",labRow = nfkb_gene[,15],labCol=c("BR","BR+TNF","SC","SC+TNF"),density.info="none",main="Putative Human")
+
+par(font.axis=2,font.lab=2)
+x<-colSums(nfkb_gene[,c(24,25,22,23)])
+x_down<-min(x)-5
+x_up<-max(x)+5
+barplot(x,las=1,ylab="Summed Zscore",names =c("BR","BR+TNF","SC","SC+TNF"),ylim=c(x_down,x_up),main="Putative Human")
+box()
+abline(h=0)
+
+#
+#nfkb was list was obtained from: http://bioinfo.lifl.fr/NF-KB/ Putative mmouse
+nfkb_gene<-subset(normalised_gene,normalised_gene[,15] %in% nfkb_complilation[,4])
+nfkb_gene<-nfkb_gene[order(nfkb_gene[,24]),]
+
+par(font.axis=2,font.lab=2)
+x<-heatmap.2(as.matrix(nfkb_gene[,c(24,25,22,23)]), col=redgreen(75),
+             scale="none",key=T, symkey=T, Rowv=F,Colv=FALSE,cexRow=1,
+             trace='none',dendrogram="none",cexCol=0.7,srtCol =90,key.title=" ",
+             ylab = "",labRow = nfkb_gene[,15],labCol=c("BR","BR+TNF","SC","SC+TNF"),density.info="none",main="Putative Mouse")
+
+par(font.axis=2,font.lab=2)
+x<-colSums(nfkb_gene[,c(24,25,22,23)])
+x_down<-min(x)-3
+x_up<-max(x)+3
+barplot(x,las=1,ylab="Summed Zscore",names =c("BR","BR+TNF","SC","SC+TNF"),ylim=c(x_down,x_up),main="Putative Mouse")
+box()
+abline(h=0)
+
+#nfkb was list was obtained from: http://bioinfo.lifl.fr/NF-KB/ Experiment other genes
+nfkb_gene<-subset(normalised_gene,normalised_gene[,15] %in% nfkb_complilation[,5])
+nfkb_gene<-nfkb_gene[order(nfkb_gene[,24]),]
+
+par(font.axis=2,font.lab=2)
+x<-heatmap.2(as.matrix(nfkb_gene[,c(24,25,22,23)]), col=redgreen(75),
+             scale="none",key=T, symkey=T, Rowv=F,Colv=FALSE,cexRow=1,
+             trace='none',dendrogram="none",cexCol=0.7,srtCol =90,key.title=" ",
+             ylab = "",labRow = nfkb_gene[,15],labCol=c("BR","BR+TNF","SC","SC+TNF"),density.info="none",main="Experiment Other species")
+
+par(font.axis=2,font.lab=2)
+x<-colSums(nfkb_gene[,c(24,25,22,23)])
+x_down<-min(x)-2
+x_up<-max(x)+2
+barplot(x,las=1,ylab="Summed Zscore",names =c("BR","BR+TNF","SC","SC+TNF"),ylim=c(x_down,x_up),main="Experiment Other species")
+box()
+abline(h=0)
+
+#nfkb was list was obtained from: http://bioinfo.lifl.fr/NF-KB/ putative other species
+
+nfkb_gene<-subset(normalised_gene,normalised_gene[,15] %in% nfkb_complilation[,6])
+nfkb_gene<-nfkb_gene[order(nfkb_gene[,24]),]
+
+par(font.axis=2,font.lab=2)
+x<-heatmap.2(as.matrix(nfkb_gene[,c(24,25,22,23)]), col=redgreen(75),
+             scale="none",key=T, symkey=T, Rowv=F,Colv=FALSE,cexRow=1,
+             trace='none',dendrogram="none",cexCol=0.7,srtCol =90,key.title=" ",
+             ylab = "",labRow = nfkb_gene[,15],labCol=c("BR","BR+TNF","SC","SC+TNF"),density.info="none",main="Putative Other species")
+
+par(font.axis=2,font.lab=2)
+x<-colSums(nfkb_gene[,c(24,25,22,23)])
+x_down<-min(x)-5
+x_up<-max(x)+5
+barplot(x,las=1,ylab="Summed Zscore",names =c("BR","BR+TNF","SC","SC+TNF"),ylim=c(x_down,x_up),,main="Putative Other species")
+box()
+abline(h=0)
+
+#nfkb was list was obtained from: http://bioinfo.lifl.fr/NF-KB/ combining all the genes
+
+temp<-c(nfkb_complilation[,1],nfkb_complilation[,2],nfkb_complilation[,3],nfkb_complilation[,4],nfkb_complilation[,5],nfkb_complilation[,6])
+temp<-unique(temp)
+
+nfkb_gene<-subset(normalised_gene,normalised_gene[,15] %in% temp)
+nfkb_gene<-nfkb_gene[order(nfkb_gene[,24]),]
+
+par(font.axis=2,font.lab=2)
+x<-heatmap.2(as.matrix(nfkb_gene[,c(24,25,22,23)]), col=redgreen(75),
+             scale="none",key=T, symkey=T, Rowv=F,Colv=FALSE,cexRow=0.4,
+             trace='none',dendrogram="none",cexCol=0.7,srtCol =90,key.title=" ",
+             ylab = "",labRow = nfkb_gene[,15],labCol=c("BR","BR+TNF","SC","SC+TNF"),density.info="none",main="Combine all methods")
+
+par(font.axis=2,font.lab=2)
+x<-colSums(nfkb_gene[,c(24,25,22,23)])
+x_down<-min(x)-5
+x_up<-max(x)+5
+barplot(x,las=1,ylab="Summed Zscore",names =c("BR","BR+TNF","SC","SC+TNF"),ylim=c(x_down,x_up),main="Combine all methods")
+box()
+abline(h=0)
+
+```
+
+We selcted the experimentaly verified genes in humans and mouse and futher analysed the Heatmap (again) the fold change, heterogenity in the gene expression profiles and the gene expression
+
+```{r}
+#nfkb was list was obtained from: http://bioinfo.lifl.fr/NF-KB/
+library(gplots)
+temp<-c(nfkb_complilation[,1],nfkb_complilation[,2])
+nfkb_gene<-subset(normalised_gene,normalised_gene[,15] %in% temp)
+nfkb_gene<-nfkb_gene[order(nfkb_gene[,24]),]
+
+par(font.axis=2,font.lab=2)
+x<-heatmap.2(as.matrix(nfkb_gene[,c(24,25,22,23)]), col=redgreen(75),
+             scale="none",key=T, symkey=T, Rowv=F,Colv=FALSE,cexRow=0.7,
+             trace='none',dendrogram="none",cexCol=0.7,srtCol =90,key.title=" ",
+             ylab = "",labRow = nfkb_gene[,15],labCol=c("BR","BR+TNF","SC","SC+TNF"),density.info="none",main="Experiment Human and mouse")
+
+par(font.axis=2,font.lab=2)
+x<-colSums(nfkb_gene[,c(24,25,22,23)])
+barplot(x,las=1,ylab="Summed Zscore",names =c("BR","BR+TNF","SC","SC+TNF"),ylim=c(-60,60),main="Experiment Human and mouse")
+box()
+abline(h=0)
+
+par(font.axis=2,font.lab=2)
+nfkb_gene<-nfkb_gene[order(nfkb_gene[,26]),]
+x<-heatmap.2(as.matrix(log(nfkb_gene[,c(26:29)],base=2)), col=redblue(75),
+             scale="none",key=T, symkey=F, Rowv=F,Colv=FALSE,cexRow=0.7,
+             trace='none',dendrogram="none",cexCol=0.8,srtCol =70,key.title=" ",
+             ylab = "",labRow = nfkb_gene[,15],density.info="none")
+
+
+par(font.axis=2,font.lab=2)
+boxplot(log(nfkb_gene[,c(26:29)],base=2), col="gray",names=c("SC+TNF/SC","BR+TNF/BR","SC/BR","SC+TNF/BR+TNF"),cex.axis=0.8,las=1,ylab="log 2(Foldchange)",pch=18, ylim=c(-1.5,1.5),lty=1,lwd=0.6)
+abline(h=0,col="red",lwd=0.6)
+
+boxplot(nfkb_gene[,c(26:29)], col="gray",names=c("SC+TNF/SC","BR+TNF/BR","SC/BR","SC+TNF/BR+TNF"),cex.axis=0.8,las=1,ylab="Foldchange",pch=18, ylim=c(0,2.5),lty=1,lwd=0.6)
+abline(h=1,col="red",lwd=0.6)
+
+# plot the relative rank frequencies
+# generating the string to represent the trend in gene expression
+
+for( i in 1:nrow(nfkb_gene)){
+  t<-nfkb_gene[i,c(34,35,32,33)]
+  names<-c("RA","RA+TNF","CI","CI+TNF")
+  t1<-names[order(t)]
+  nfkb_gene[i,37]<-paste(t1[1],t1[2],t1[3],t1[4],sep="<")
+}
+
+x<-as.data.frame(table(nfkb_gene[,37]))
+x<-x[order(x[,2]),]
+par(font.axis=2,font.lab=2)
+par(mar=c(4,15,3,2))
+barplot(x[,2], main = "",horiz = T,las=1,names=x[,1],xlab="number of genes",xlim=c(0,16))
+box()
+
+#plot the frequency of rank as a stacked barblot
+counts<-as.data.frame(table(nfkb_gene[,34]))
+counts[,2]<-counts[,2]/nrow(nfkb_gene)
+counts[,3]<-as.data.frame(table(nfkb_gene[,35]))[,2]/nrow(nfkb_gene)
+counts[,4]<-as.data.frame(table(nfkb_gene[,32]))[,2]/nrow(nfkb_gene)
+counts[,5]<-as.data.frame(table(nfkb_gene[,33]))[,2]/nrow(nfkb_gene)
+colnames(counts)[c(2:5)]<-c("BR","BR+TNF","SC","SC+TNF")
+
+par(font.axis=2,font.lab=2)
+barplot(as.matrix(counts[,2:5]), las=1, xlim=c(0,6),col=redgreen(5),ylab="Fraction of the total number of genes")
+legend("bottomright",legend = c("Rank 4","Rank3","Rank2","Rank1"), fill = redgreen(5))
+box()
+
+
+```
+Venn Diagram : Selected the number of genes in the dataset which show an increase in gene expression by atleast 10%
+
+```{r}
+nfkb_gene_upregulated_in_circle<-as.character(subset(nfkb_gene,nfkb_gene[,26]>=1.1)[,15])
+nfkb_gene_upregulated_in_rectangle<-as.character(subset(nfkb_gene,nfkb_gene[,27]>=1.1)[,15])
+nfkb_gene_upregulated_in_regtangle_and_circle<-subset(nfkb_gene_upregulated_in_circle,nfkb_gene_upregulated_in_circle%in%nfkb_gene_upregulated_in_rectangle)
+
+length(nfkb_gene_upregulated_in_circle)
+length(nfkb_gene_upregulated_in_rectangle)
+length(nfkb_gene_upregulated_in_regtangle_and_circle)
+
+X<-nfkb_gene_upregulated_in_rectangle
+A<-nfkb_gene_upregulated_in_circle
+B<-nfkb_gene_upregulated_in_regtangle_and_circle
+A<-c(nfkb_gene_upregulated_in_circle, rep(NA,length(X)-length(A)))
+B<-c(nfkb_gene_upregulated_in_regtangle_and_circle, rep(NA,length(X)-length(B)))
+
+venn_diagnram_nfkb<-as.data.frame(cbind( A,X,B ))
+colnames(venn_diagnram_nfkb)<-c("nfkb_gene_upregulated_in_circle","nfkb_gene_upregulated_in_rectangle","nfkb_gene_upregulated_in_regtangle_and_circle")
+venn_diagnram_nfkb
+
+library(VennDiagram)
+par(font=2)
+draw.pairwise.venn(length(nfkb_gene_upregulated_in_circle),length(nfkb_gene_upregulated_in_rectangle),length(nfkb_gene_upregulated_in_regtangle_and_circle), category = c("Increased expression in circle", "Increased expression in rectangle"),
+                   lty = rep("blank",2), fill = c("light blue", "pink"), 
+                   alpha = rep(0.5, 2), cat.pos = c(0,0), cat.dist = rep(0.025, 2),scaled = FALSE)
+
+```
+
+TNF responsiveness of NFkB genes(much higher threshold): Select genes that change by >=30% change
+
+```{r}
+# new_subset_TNF_responsive_nfkb_gene
+
+#select the different groups
+
+changing_in_Rectangle_not_circle<-subset(nfkb_gene, (nfkb_gene[,27] >=1.3 | nfkb_gene[,27] <=0.7) & 
+                                           (nfkb_gene[,26] < 1.3 & nfkb_gene[,26] >0.7))
+
+changing_in_Circle_not_Rectangle<-subset(nfkb_gene, (nfkb_gene[,26] >=1.3 | nfkb_gene[,26] <=0.7) & 
+                                           (nfkb_gene[,27] < 1.3 & nfkb_gene[,27] >0.7))
+
+changing_in_Circle_and_Rectangle<-subset(nfkb_gene, (nfkb_gene[,26] >=1.3 | nfkb_gene[,26] <=0.7) & 
+                                           (nfkb_gene[,27] >=1.3 | nfkb_gene[,27] <=0.7))
+changing_in_Rectangle_not_circle[,15]
+changing_in_Circle_not_Rectangle[,15]
+changing_in_Circle_and_Rectangle[,15]
+#SAve these lists
+
+
+#plot the fold change selection : SC/BR before and SC/TNF after
+plot(nfkb_gene[,26]~nfkb_gene[,27],pch=18,cex=0.8,las=1,col="gray",ylab="SC+TNF/SC",xlab="BR+TNF/BR",xlim=c(0,2.5),ylim=c(0,2.5))
+points(changing_in_Rectangle_not_circle[,26]~changing_in_Rectangle_not_circle[,27],pch=18,cex=1,las=1,col="darkblue")
+points(changing_in_Circle_not_Rectangle[,26]~changing_in_Circle_not_Rectangle[,27],pch=18,cex=1,las=1,col="darkred")
+points(changing_in_Circle_and_Rectangle[,26]~changing_in_Circle_and_Rectangle[,27],pch=18,cex=1,las=1,col="cyan3")
+abline(h=0.7)
+abline(h=1.3)
+abline(v=0.7)
+abline(v=1.3)
+
+#plot the fold change selection : SC/BR before and SC/TNF after
+plot(nfkb_gene[,26]~nfkb_gene[,27],pch=18,cex=0.8,las=1,col="gray",ylab="SC+TNF/SC",xlab="BR+TNF/BR",xlim=c(0,2.5),ylim=c(0,2.5))
+points(changing_in_Rectangle_not_circle[,26]~changing_in_Rectangle_not_circle[,27],pch=18,cex=1,las=1,col="darkblue")
+points(changing_in_Circle_not_Rectangle[,26]~changing_in_Circle_not_Rectangle[,27],pch=18,cex=1,las=1,col="darkred")
+points(changing_in_Circle_and_Rectangle[,26]~changing_in_Circle_and_Rectangle[,27],pch=18,cex=1,las=1,col="cyan3")
+abline(h=0.7)
+abline(h=1.3)
+abline(v=0.7)
+abline(v=1.3)
+text(changing_in_Rectangle_not_circle[,27]+0.05,changing_in_Rectangle_not_circle[,26]+0.03,labels=changing_in_Rectangle_not_circle[,15],cex=0.6)
+text(changing_in_Circle_not_Rectangle[,27]+0.05,changing_in_Circle_not_Rectangle[,26]+0.03,labels=changing_in_Circle_not_Rectangle[,15],cex=0.6)
+text(changing_in_Circle_and_Rectangle[,27]+0.05,changing_in_Circle_and_Rectangle[,26]+0.03,labels=changing_in_Circle_and_Rectangle[,15],cex=0.6)
+
+differnt_before_same_after<-subset(nfkb_gene, (nfkb_gene[,28] >=1.3 | nfkb_gene[,28] <=0.7) & 
+                                     (nfkb_gene[,29] < 1.3 & nfkb_gene[,29] >0.7))
+
+same_before_different_after<-subset(nfkb_gene, (nfkb_gene[,29] >=1.3 | nfkb_gene[,29] <=0.7) & 
+                                      (nfkb_gene[,28] < 1.3 & nfkb_gene[,28] >0.7))
+
+differnt_before_and_after<-subset(nfkb_gene, (nfkb_gene[,28] >=1.3 | nfkb_gene[,28] <=0.7) & 
+                                    (nfkb_gene[,29] >=1.3 | nfkb_gene[,29] <=0.7))
+differnt_before_same_after[,15]
+same_before_different_after[,15]
+differnt_before_and_after[,15]
+
+
+#plot the fold change selection : SC/BR before and SC/TNF after
+plot(nfkb_gene[,28]~nfkb_gene[,29],pch=18,cex=0.8,las=1,col="gray",ylab="SC/BR",xlab="SC+TNF/BR+TNF",xlim=c(0,2.5),ylim=c(0,2.5))
+points(differnt_before_same_after[,28]~differnt_before_same_after[,29],pch=18,cex=1,las=1,col="green4")
+points(differnt_before_and_after[,28]~differnt_before_and_after[,29],pch=18,cex=1,las=1,col="red")
+points(same_before_different_after[,28]~same_before_different_after[,29],pch=18,cex=1,las=1,col="purple")
+abline(h=0.7)
+abline(h=1.3)
+abline(v=0.7)
+abline(v=1.3)
+
+
+plot(nfkb_gene[,28]~nfkb_gene[,29],pch=18,cex=0.8,las=1,col="gray",ylab="SC/BR",xlab="SC+TNF/BR+TNF",xlim=c(0,2.5),ylim=c(0,2.5))
+points(differnt_before_same_after[,28]~differnt_before_same_after[,29],pch=18,cex=1,las=1,col="green4")
+points(differnt_before_and_after[,28]~differnt_before_and_after[,29],pch=18,cex=1,las=1,col="red")
+points(same_before_different_after[,28]~same_before_different_after[,29],pch=18,cex=1,las=1,col="purple")
+abline(h=0.7)
+abline(h=1.3)
+abline(v=0.7)
+abline(v=1.3)
+text(differnt_before_same_after[,29]+0.05,differnt_before_same_after[,28]+0.03,labels=differnt_before_same_after[,15],cex=0.6)
+text(differnt_before_and_after[,29]+0.05,differnt_before_and_after[,28]+0.03,labels=differnt_before_and_after[,15],cex=0.6)
+text(same_before_different_after[,29]+0.05,same_before_different_after[,28]+0.03,labels=same_before_different_after[,15],cex=0.6)
+
+```
+
+**MKL dependent SRF target genes**
+
+Plot the gene expression profiles of the MKL dependent SRF target genes obtained from different methods
+```{r}
+mkl_compliation <- read.csv("D:/saradha/Anindo/microarray_analysis/Final run/mkl_compliation.csv", stringsAsFactors=FALSE)
+
+# take a list of mkl genes
+#mkl was list was obtained from Esnault et.al Direct and Near
+
+mkl_gene<-subset(normalised_gene,normalised_gene[,15] %in% mkl_compliation[,1])
+
+par(font.axis=2,font.lab=2)
+mkl_gene<-mkl_gene[order(mkl_gene[,24]),]
+x<-heatmap.2(as.matrix(mkl_gene[,c(24,25,22,23)]), col=redgreen(75),
+             scale="none",key=T, symkey=T, Rowv=F,Colv=FALSE,cexRow=0.15,
+             trace='none',dendrogram="none",cexCol=0.7,srtCol =90,key.title=" ",
+             ylab = "",labRow = mkl_gene[,15],labCol=c("BR","BR+TNF","SC","SC+TNF"),density.info="none",main="Direct and Near")
+
+
+
+par(font.axis=2,font.lab=2)
+x<-colSums(mkl_gene[,c(24,25,22,23)])
+x_down<-min(x)-5
+x_up<-max(x)+5
+barplot(x,las=1,ylab="Summed Zscore",names =c("BR","BR+TNF","SC","SC+TNF"),ylim=c(x_down,x_up),main="Direct and Near")
+box()
+abline(h=0)
+
+#mkl was list was obtained from Esnault et.al Direct
+
+mkl_gene<-subset(normalised_gene,normalised_gene[,15] %in% mkl_compliation[,2])
+
+par(font.axis=2,font.lab=2)
+mkl_gene<-mkl_gene[order(mkl_gene[,24]),]
+x<-heatmap.2(as.matrix(mkl_gene[,c(24,25,22,23)]), col=redgreen(75),
+             scale="none",key=T, symkey=T, Rowv=F,Colv=FALSE,cexRow=0.3,
+             trace='none',dendrogram="none",cexCol=0.7,srtCol =90,key.title=" ",
+             ylab = "",labRow = mkl_gene[,15],labCol=c("BR","BR+TNF","SC","SC+TNF"),density.info="none",main="Direct")
+
+
+
+par(font.axis=2,font.lab=2)
+x<-colSums(mkl_gene[,c(24,25,22,23)])
+x_down<-min(x)-5
+x_up<-max(x)+5
+barplot(x,las=1,ylab="Summed Zscore",names =c("BR","BR+TNF","SC","SC+TNF"),ylim=c(x_down,x_up),main="Direct")
+box()
+abline(h=0)
+
+#mkl was list was obtained from Esnault et.al Stringent
+
+mkl_gene<-subset(normalised_gene,normalised_gene[,15] %in% mkl_compliation[,3])
+
+par(font.axis=2,font.lab=2)
+mkl_gene<-mkl_gene[order(mkl_gene[,24]),]
+x<-heatmap.2(as.matrix(mkl_gene[,c(24,25,22,23)]), col=redgreen(75),
+             scale="none",key=T, symkey=T, Rowv=F,Colv=FALSE,cexRow=0.2,
+             trace='none',dendrogram="none",cexCol=0.7,srtCol =90,key.title=" ",
+             ylab = "",labRow = mkl_gene[,15],labCol=c("BR","BR+TNF","SC","SC+TNF"),density.info="none",main="Direct near and Actin dependent")
+
+
+
+par(font.axis=2,font.lab=2)
+x<-colSums(mkl_gene[,c(24,25,22,23)])
+x_down<-min(x)-5
+x_up<-max(x)+5
+barplot(x,las=1,ylab="Summed Zscore",names =c("BR","BR+TNF","SC","SC+TNF"),ylim=c(x_down,x_up),main="Direct near and Actin dependent")
+box()
+abline(h=0)
+
+
+#mkl was list was obtained from Esnault et.al Stringent Direct
+
+mkl_gene<-subset(normalised_gene,normalised_gene[,15] %in% mkl_compliation[,4])
+
+par(font.axis=2,font.lab=2)
+mkl_gene<-mkl_gene[order(mkl_gene[,24]),]
+x<-heatmap.2(as.matrix(mkl_gene[,c(24,25,22,23)]), col=redgreen(75),
+             scale="none",key=T, symkey=T, Rowv=F,Colv=FALSE,cexRow=0.3,
+             trace='none',dendrogram="none",cexCol=0.7,srtCol =90,key.title=" ",
+             ylab = "",labRow = mkl_gene[,15],labCol=c("BR","BR+TNF","SC","SC+TNF"),density.info="none",main="Direct and Actin dependent")
+
+
+par(font.axis=2,font.lab=2)
+x<-colSums(mkl_gene[,c(24,25,22,23)])
+x_down<-min(x)-5
+x_up<-max(x)+5
+barplot(x,las=1,ylab="Summed Zscore",names =c("BR","BR+TNF","SC","SC+TNF"),ylim=c(x_down,x_up),main="Direct and Actin dependent")
+box()
+abline(h=0)
+
+#mkl was list was obtained from Selvam et.al RT_PCR
+
+mkl_gene<-subset(normalised_gene,normalised_gene[,15] %in% mkl_compliation[,5])
+
+par(font.axis=2,font.lab=2)
+mkl_gene<-mkl_gene[order(mkl_gene[,24]),]
+x<-heatmap.2(as.matrix(mkl_gene[,c(24,25,22,23)]), col=redgreen(75),
+             scale="none",key=T, symkey=T, Rowv=F,Colv=FALSE,cexRow=0.8,
+             trace='none',dendrogram="none",cexCol=0.7,srtCol =90,key.title=" ",
+             ylab = "",labRow = mkl_gene[,15],labCol=c("BR","BR+TNF","SC","SC+TNF"),density.info="none",main="RT pCR validated")
+
+
+par(font.axis=2,font.lab=2)
+x<-colSums(mkl_gene[,c(24,25,22,23)])
+x_down<-min(x)-5
+x_up<-max(x)+5
+barplot(x,las=1,ylab="Summed Zscore",names =c("BR","BR+TNF","SC","SC+TNF"),ylim=c(x_down,x_up),main="RT pCR validated")
+box()
+abline(h=0)
+
+
+#mkl was list was obtained from combining all the data
+temp<-unique(c(mkl_compliation[,1],mkl_compliation[,2],mkl_compliation[,3],mkl_compliation[,4],mkl_compliation[,5]))
+mkl_gene<-subset(normalised_gene,normalised_gene[,15] %in% temp)
+
+par(font.axis=2,font.lab=2)
+mkl_gene<-mkl_gene[order(mkl_gene[,24]),]
+x<-heatmap.2(as.matrix(mkl_gene[,c(24,25,22,23)]), col=redgreen(75),
+             scale="none",key=T, symkey=T, Rowv=F,Colv=FALSE,cexRow=0.15,
+             trace='none',dendrogram="none",cexCol=0.7,srtCol =90,key.title=" ",
+             ylab = "",labRow = mkl_gene[,15],labCol=c("BR","BR+TNF","SC","SC+TNF"),density.info="none",main="All combined")
+
+
+par(font.axis=2,font.lab=2)
+x<-colSums(mkl_gene[,c(24,25,22,23)])
+x_down<-min(x)-5
+x_up<-max(x)+5
+barplot(x,las=1,ylab="Summed Zscore",names =c("BR","BR+TNF","SC","SC+TNF"),ylim=c(x_down,x_up),main="All combined")
+box()
+abline(h=0)
+
+```
+
+MKL dependent SRF target genes where MKL-SRF directly bind to the gene and are sensitive to actin structures were chosen and theie expression profile was exlored further
+```{r}
+# take a list of mkl genes
+#mkl was list was obtained from Esnault et.al (non-experimental) Direct and Near
+
+mkl_gene<-subset(normalised_gene,normalised_gene[,15] %in% mkl_compliation[,4])
+
+par(font.axis=2,font.lab=2)
+mkl_gene<-mkl_gene[order(mkl_gene[,24]),]
+x<-heatmap.2(as.matrix(mkl_gene[,c(24,25,22,23)]), col=redgreen(75),
+             scale="none",key=T, symkey=T, Rowv=F,Colv=FALSE,cexRow=0.3,
+             trace='none',dendrogram="none",cexCol=0.7,srtCol =90,key.title=" ",
+             ylab = "",labRow = mkl_gene[,15],labCol=c("BR","BR+TNF","SC","SC+TNF"),density.info="none",main="Direct and Actin dependent")
+
+
+par(font.axis=2,font.lab=2)
+x<-colSums(mkl_gene[,c(24,25,22,23)])
+barplot(x,las=1,ylab="Summed Zscore",names =c("BR","BR+TNF","SC","SC+TNF"),ylim=c(-270,270),main="Direct and Actin dependent")
+box()
+abline(h=0)
+
+par(font.axis=2,font.lab=2)
+mkl_gene<-mkl_gene[order(mkl_gene[,26]),]
+x<-heatmap.2(as.matrix(log(mkl_gene[,c(26:29)],base=2)), col=redblue(75),
+             scale="none",key=T, symkey=F, Rowv=F,Colv=FALSE,cexRow=0.3,
+             trace='none',dendrogram="none",cexCol=0.8,srtCol =70,key.title=" ",
+             ylab = "",labRow = mkl_gene[,15],density.info="none")
+
+
+
+par(font.axis=2,font.lab=2)
+boxplot(log(mkl_gene[,c(26:29)],base=2), col="gray",names=c("SC+TNF/SC","BR+TNF/BR","SC/BR","SC+TNF/BR+TNF"),cex.axis=0.8,las=1,ylab="log 2(Foldchange)",pch=18, ylim=c(-1.5,1.5),lty=1,lwd=0.6)
+abline(h=0,col="red",lwd=0.6)
+
+boxplot(mkl_gene[,c(26:29)], col="gray",names=c("SC+TNF/SC","BR+TNF/BR","SC/BR","SC+TNF/BR+TNF"),cex.axis=0.8,las=1,ylab="Foldchange",pch=18, ylim=c(0,2.5),lty=1,lwd=0.6)
+abline(h=1,col="red",lwd=0.6)
+
+
+# plot the relative rank frequencies
+# generating the string to represent the trend in gene expression
+
+for( i in 1:nrow(mkl_gene)){
+  t<-mkl_gene[i,c(34,35,32,33)]
+  names<-c("RA","RA+TNF","CI","CI+TNF")
+  t1<-names[order(t)]
+  mkl_gene[i,37]<-paste(t1[1],t1[2],t1[3],t1[4],sep="<")
+}
+
+x<-as.data.frame(table(mkl_gene[,37]))
+x<-x[order(x[,2]),]
+par(font.axis=2,font.lab=2)
+par(mar=c(4,15,3,2))
+barplot(x[,2], main = "",horiz = T,las=1,names=x[,1],xlab="number of genes",xlim=c(0,75))
+box()
+
+#plot the frequency of rank as a stacked barblot
+counts<-as.data.frame(table(mkl_gene[,34]))
+counts[,2]<-counts[,2]/nrow(mkl_gene)
+counts[,3]<-as.data.frame(table(mkl_gene[,35]))[,2]/nrow(mkl_gene)
+counts[,4]<-as.data.frame(table(mkl_gene[,32]))[,2]/nrow(mkl_gene)
+counts[,5]<-as.data.frame(table(mkl_gene[,33]))[,2]/nrow(mkl_gene)
+colnames(counts)[c(2:5)]<-c("BR","BR+TNF","SC","SC+TNF")
+
+par(font.axis=2,font.lab=2)
+barplot(as.matrix(counts[,2:5]), las=1, xlim=c(0,6),col=redgreen(5),ylab="Fraction of the total number of genes")
+legend("bottomright",legend = c("Rank 4","Rank3","Rank2","Rank1"), fill = redgreen(5))
+box()
+
+
+
+```
+venndiagram mkl : Select genes whose expression reduced by atleast 10%
+
+```{r}
+# ven diagram
+mkl_gene_downregulated_in_circle<-as.character(subset(mkl_gene,mkl_gene[,26]<=0.9)[,15])
+mkl_gene_downregulated_in_regtangle<-as.character(subset(mkl_gene,mkl_gene[,27]<=0.9)[,15])
+mkl_gene_downregulated_in_regtangle_and_circle<-subset(mkl_gene_downregulated_in_circle,mkl_gene_downregulated_in_circle%in%mkl_gene_downregulated_in_regtangle)
+
+X<-mkl_gene_downregulated_in_circle
+A<-mkl_gene_downregulated_in_regtangle
+B<-mkl_gene_downregulated_in_regtangle_and_circle
+A<-c(mkl_gene_downregulated_in_regtangle, rep(NA,length(X)-length(A)))
+B<-c(mkl_gene_downregulated_in_regtangle_and_circle, rep(NA,length(X)-length(B)))
+
+venn_diagnram_mkl<-as.data.frame(cbind( A,X,B ))
+colnames(venn_diagnram_mkl)<-c("mkl_gene_downregulated_in_regtangle","mkl_gene_downregulated_in_circle","mkl_gene_downregulated_in_regtangle_and_circle")
+venn_diagnram_mkl
+
+
+library(VennDiagram)
+par(font=2)
+draw.pairwise.venn(length(mkl_gene_downregulated_in_circle),length(mkl_gene_downregulated_in_regtangle),length(mkl_gene_downregulated_in_regtangle_and_circle), category = c("Increased expression in circle", "Increased expression in rectangle"),
+                   lty = rep("blank",2), fill = c("light blue", "pink"), 
+                   alpha = rep(0.5, 2), cat.pos = c(0,0), cat.dist = rep(0.025, 2),scaled = FALSE)
+
+
+
+```
+TNF responsiveness of MKl target genes: higher threshold: Differentially regulated by >=30%
+
+```{r error=FALSE}
+#select the different groups
+
+changing_in_Circle_not_Rectangle<-subset(mkl_gene, (mkl_gene[,26] >=1.3 | mkl_gene[,26] <=0.7) & 
+                                           (mkl_gene[,27] < 1.3& mkl_gene[,27] >0.7))
+
+changing_in_Rectangle_not_circle<-subset(mkl_gene, (mkl_gene[,27] >=1.3 | mkl_gene[,27] <=0.7) & 
+                                           (mkl_gene[,26] < 1.3 & mkl_gene[,26] >0.7))
+
+changing_in_Circle_and_Rectangle<-subset(mkl_gene, (mkl_gene[,26] >=1.3 | mkl_gene[,26] <=0.7) & 
+                                           (mkl_gene[,27] >=1.3 | mkl_gene[,27] <=0.7))
+
+
+
+changing_in_Rectangle_not_circle[,15]
+changing_in_Circle_not_Rectangle[,15]
+changing_in_Circle_and_Rectangle[,15]
+
+#plot the fold change selection : SC/BR before and SC/TNF after
+
+plot(mkl_gene[,26]~mkl_gene[,27],pch=18,cex=0.8,las=1,col="gray",ylab="SC+TNF/SC",xlab="BR+TNF/BR")
+points(changing_in_Rectangle_not_circle[,26]~changing_in_Rectangle_not_circle[,27],pch=18,cex=1,las=1,col="purple")
+points(changing_in_Circle_not_Rectangle[,26]~changing_in_Circle_not_Rectangle[,27],pch=18,cex=1,las=1,col="green4")
+points(changing_in_Circle_and_Rectangle[,26]~changing_in_Circle_and_Rectangle[,27],pch=18,cex=1,las=1,col="red")
+abline(h=0.7)
+abline(h=1.3)
+abline(v=0.7)
+abline(v=1.3)
+
+
+#plot the fold change selection : SC/BR before and SC/TNF after
+plot(nfkb_gene[,26]~nfkb_gene[,27],pch=18,cex=0.8,las=1,col="gray",ylab="SC+TNF/SC",xlab="BR+TNF/BR",xlim=c(0,2.5),ylim=c(0,2.5))
+points(changing_in_Rectangle_not_circle[,26]~changing_in_Rectangle_not_circle[,27],pch=18,cex=1,las=1,col="darkblue")
+points(changing_in_Circle_not_Rectangle[,26]~changing_in_Circle_not_Rectangle[,27],pch=18,cex=1,las=1,col="darkred")
+points(changing_in_Circle_and_Rectangle[,26]~changing_in_Circle_and_Rectangle[,27],pch=18,cex=1,las=1,col="cyan3")
+abline(h=0.7)
+abline(h=1.3)
+abline(v=0.7)
+abline(v=1.3)
+
+differnt_before_same_after<-subset(mkl_gene, (mkl_gene[,28] >=1.3 | mkl_gene[,28] <=0.7) & 
+                                     (mkl_gene[,29] < 1.3 & mkl_gene[,29] >0.7))
+
+same_before_different_after<-subset(mkl_gene, (mkl_gene[,29] >=1.3 | mkl_gene[,29] <=0.7) & 
+                                      (mkl_gene[,28] < 1.3 & mkl_gene[,28] >0.7))
+
+differnt_before_and_after<-subset(mkl_gene, (mkl_gene[,28] >=1.3 | mkl_gene[,28] <=0.7) & 
+                                    (mkl_gene[,29] >=1.3 | mkl_gene[,29] <=0.7))
+
+
+
+differnt_before_same_after[,15]
+differnt_before_and_after[,15]
+same_before_different_after[,15]
+
+
+#plot the fold change selection : SC/BR before and SC/TNF after
+plot(mkl_gene[,28]~mkl_gene[,29],pch=18,cex=0.8,las=1,col="gray",ylab="SC/BR",xlab="SC+TNF/BR+TNF",xlim=c(0,2.5),ylim=c(0,2.5))
+points(differnt_before_same_after[,28]~differnt_before_same_after[,29],pch=18,cex=1,las=1,col="green4")
+points(differnt_before_and_after[,28]~differnt_before_and_after[,29],pch=18,cex=1,las=1,col="red")
+points(same_before_different_after[,28]~same_before_different_after[,29],pch=18,cex=1,las=1,col="purple")
+abline(h=0.7)
+abline(h=1.3)
+abline(v=0.7)
+abline(v=1.3)
+
+
+plot(mkl_gene[,28]~mkl_gene[,29],pch=18,cex=0.8,las=1,col="gray",ylab="SC/BR",xlab="SC+TNF/BR+TNF",xlim=c(0,2.5),ylim=c(0,2.5))
+points(differnt_before_same_after[,28]~differnt_before_same_after[,29],pch=18,cex=1,las=1,col="green4")
+points(differnt_before_and_after[,28]~differnt_before_and_after[,29],pch=18,cex=1,las=1,col="red")
+points(same_before_different_after[,28]~same_before_different_after[,29],pch=18,cex=1,las=1,col="purple")
+abline(h=0.7)
+abline(h=1.3)
+abline(v=0.7)
+abline(v=1.3)
+text(differnt_before_same_after[,29]+0.05,differnt_before_same_after[,28]+0.03,labels=differnt_before_same_after[,15],cex=0.6)
+text(differnt_before_and_after[,29]+0.05,differnt_before_and_after[,28]+0.03,labels=differnt_before_and_after[,15],cex=0.6)
+text(same_before_different_after[,29]+0.05,same_before_different_after[,28]+0.03,labels=same_before_different_after[,15],cex=0.6)
+
+
+```
+**Part3: Selecting different groups of genes**
+The Whole genome analysis: Part one genes that are differntially regulated by TNF in the 2 geometries
+Part2: changes in the gene expression patternes inthe two geometries before and after treatment
+```{r}
+#Part3
+
+#select the different groups
+
+changing_in_Rectangle_not_circle<-subset(normalised_gene, (normalised_gene[,27] >=1.3 | normalised_gene[,27] <=0.7) & 
+                                           (normalised_gene[,26] < 1.3 & normalised_gene[,26] >0.7))
+
+changing_in_Circle_not_Rectangle<-subset(normalised_gene, (normalised_gene[,26] >=1.3 | normalised_gene[,26] <=0.7) & 
+                                           (normalised_gene[,27] < 1.3 & normalised_gene[,27] >0.7))
+
+changing_in_Circle_and_Rectangle<-subset(normalised_gene, (normalised_gene[,26] >=1.3 | normalised_gene[,26] <=0.7) & 
+                                           (normalised_gene[,27] >=1.3 | normalised_gene[,27] <=0.7))
+changing_in_Circle_and_Rectangle[,15]
+changing_in_Circle_not_Rectangle[,15]
+changing_in_Rectangle_not_circle[,15]
+#heatmap for the different subsets zscore
+library(gplots)
+changing_in_Rectangle_not_circle<-changing_in_Rectangle_not_circle[order(changing_in_Rectangle_not_circle[,25]),]
+x<-heatmap.2(as.matrix(changing_in_Rectangle_not_circle[,c(24,25,22,23)]), col=redgreen(75),
+             scale="none",key=T, symkey=T, Rowv=T,Colv=FALSE,cexRow=0.5,
+             trace='none',dendrogram="none",cexCol=0.7,srtCol =90,
+             ylab = "", labCol =c("BR","BR+TNF","SC","SC+TNF"),density.info="none",
+             labRow =changing_in_Rectangle_not_circle[,15])
+
+changing_in_Circle_not_Rectangle<-changing_in_Circle_not_Rectangle[order(changing_in_Circle_not_Rectangle[,25]),]
+x<-heatmap.2(as.matrix(changing_in_Circle_not_Rectangle[,c(24,25,22,23)]), col=redgreen(75),
+             scale="none",key=T, symkey=T, Rowv=T,Colv=FALSE,cexRow=0.5,
+             trace='none',dendrogram="none",cexCol=0.7,srtCol =90,
+             ylab = "", labCol =c("BR","BR+TNF","SC","SC+TNF"),density.info="none",
+             labRow =changing_in_Circle_not_Rectangle[,15])
+
+
+changing_in_Circle_and_Rectangle<-changing_in_Circle_and_Rectangle[order(changing_in_Circle_and_Rectangle[,25]),]
+x<-heatmap.2(as.matrix(changing_in_Circle_and_Rectangle[,c(24,25,22,23)]), col=redgreen(75),
+             scale="none",key=T, symkey=T, Rowv=T,Colv=FALSE,cexRow=0.5,
+             trace='none',dendrogram="none",cexCol=0.7,srtCol =90,
+             ylab = "", labCol =c("BR","BR+TNF","SC","SC+TNF"),density.info="none",
+             labRow =changing_in_Circle_and_Rectangle[,15])
+
+
+
+#heatmap for the different subsets Foldchange
+changing_in_Rectangle_not_circle<-changing_in_Rectangle_not_circle[order(changing_in_Rectangle_not_circle[,27]),]
+x<-heatmap.2(as.matrix(changing_in_Rectangle_not_circle[,26:27]), col=redblue(75),
+             scale="none",key=T, symkey=F, Rowv=T,Colv=FALSE,cexRow=0.5,
+             trace='none',dendrogram="none",cexCol=0.7,srtCol =90,
+             ylab = "", labCol =c("SC+TNF/SC","BR+TNF/BR"),density.info="none",
+             labRow =changing_in_Rectangle_not_circle[,15])
+
+changing_in_Circle_not_Rectangle<-changing_in_Circle_not_Rectangle[order(changing_in_Circle_not_Rectangle[,27]),]
+x<-heatmap.2(as.matrix(changing_in_Circle_not_Rectangle[,26:27]), col=redblue(75),
+             scale="none",key=T, symkey=F, Rowv=T,Colv=FALSE,cexRow=0.5,
+             trace='none',dendrogram="none",cexCol=0.7,srtCol =90,
+             ylab = "", labCol =c("SC+TNF/SC","BR+TNF/BR"),density.info="none",
+             labRow =changing_in_Circle_not_Rectangle[,15])
+
+changing_in_Circle_and_Rectangle<-changing_in_Circle_and_Rectangle[order(changing_in_Circle_and_Rectangle[,27]),]
+x<-heatmap.2(as.matrix(changing_in_Circle_and_Rectangle[,26:27]), col=redblue(75),
+             scale="none",key=T, symkey=F, Rowv=T,Colv=FALSE,cexRow=0.5,
+             trace='none',dendrogram="none",cexCol=0.7,srtCol =90,
+             ylab = "", labCol =c("SC+TNF/SC","BR+TNF/BR"),density.info="none",
+             labRow =changing_in_Circle_and_Rectangle[,15])
+
+
+#plot the fold change selection : SC+TNF SC before and BR+TNF BR after
+
+plot(normalised_gene[,26]~normalised_gene[,27],pch=18,cex=0.8,las=1,col="gray",ylab="SC+TNF/SC",xlab="BR+TNF/BR")
+points(changing_in_Rectangle_not_circle[,26]~changing_in_Rectangle_not_circle[,27],pch=18,cex=1,las=1,col="blue")
+points(changing_in_Circle_not_Rectangle[,26]~changing_in_Circle_not_Rectangle[,27],pch=18,cex=1,las=1,col="darkred")
+points(changing_in_Circle_and_Rectangle[,26]~changing_in_Circle_and_Rectangle[,27],pch=18,cex=1,las=1,col="cyan4")
+abline(h=0.7)
+abline(h=1.3)
+abline(v=0.7)
+abline(v=1.3)
+
+
+
+#plot the egg plots : SC/BR before and SC/TNF after
+plot(normalised_gene[,22]~normalised_gene[,23],pch=18,cex=0.8,las=1,col="gray",ylab="SC",xlab="SC+TNF")
+points(changing_in_Rectangle_not_circle[,22]~changing_in_Rectangle_not_circle[,23],pch=18,cex=1,las=1,col="blue")
+points(changing_in_Circle_not_Rectangle[,22]~changing_in_Circle_not_Rectangle[,23],pch=18,cex=1,las=1,col="darkred")
+points(changing_in_Circle_and_Rectangle[,22]~changing_in_Circle_and_Rectangle[,23],pch=18,cex=1,las=1,col="cyan4")
+
+plot(normalised_gene[,22]~normalised_gene[,23],pch=18,cex=0.8,las=1,col="gray",ylab="SC",xlab="SC+TNF")
+points(changing_in_Circle_not_Rectangle[,22]~changing_in_Circle_not_Rectangle[,23],pch=18,cex=1,las=1,col="darkred")
+plot(normalised_gene[,22]~normalised_gene[,23],pch=18,cex=0.8,las=1,col="gray",ylab="SC",xlab="SC+TNF")
+points(changing_in_Rectangle_not_circle[,22]~changing_in_Rectangle_not_circle[,23],pch=18,cex=1,las=1,col="blue")
+plot(normalised_gene[,22]~normalised_gene[,23],pch=18,cex=0.8,las=1,col="gray",ylab="SC",xlab="SC+TNF")
+points(changing_in_Circle_and_Rectangle[,22]~changing_in_Circle_and_Rectangle[,23],pch=18,cex=1,las=1,col="cyan4")
+
+
+plot(normalised_gene[,24]~normalised_gene[,25],pch=18,cex=0.8,las=1,col="gray",ylab="BR",xlab="BR+TNF")
+points(changing_in_Rectangle_not_circle[,24]~changing_in_Rectangle_not_circle[,25],pch=18,cex=1,las=1,col="blue")
+points(changing_in_Circle_not_Rectangle[,24]~changing_in_Circle_not_Rectangle[,25],pch=18,cex=1,las=1,col="darkred")
+points(changing_in_Circle_and_Rectangle[,24]~changing_in_Circle_and_Rectangle[,25],pch=18,cex=1,las=1,col="cyan4")
+
+plot(normalised_gene[,24]~normalised_gene[,25],pch=18,cex=0.8,las=1,col="gray",ylab="BR",xlab="BR+TNF")
+points(changing_in_Circle_not_Rectangle[,24]~changing_in_Circle_not_Rectangle[,25],pch=18,cex=1,las=1,col="darkred")
+plot(normalised_gene[,24]~normalised_gene[,25],pch=18,cex=0.8,las=1,col="gray",ylab="BR",xlab="BR+TNF")
+points(changing_in_Rectangle_not_circle[,24]~changing_in_Rectangle_not_circle[,25],pch=18,cex=1,las=1,col="blue")
+plot(normalised_gene[,24]~normalised_gene[,25],pch=18,cex=0.8,las=1,col="gray",ylab="BR",xlab="BR+TNF")
+points(changing_in_Circle_and_Rectangle[,24]~changing_in_Circle_and_Rectangle[,25],pch=18,cex=1,las=1,col="cyan4")
+
+
+
+#select the different groups
+
+different_before_same_after<-subset(normalised_gene, (normalised_gene[,28] >=1.3 | normalised_gene[,28] <=0.7) & 
+                                      (normalised_gene[,29] < 1.3 & normalised_gene[,29] >0.7))
+
+same_before_different_after<-subset(normalised_gene, (normalised_gene[,29] >=1.3 | normalised_gene[,29] <=0.7) & 
+                                      (normalised_gene[,28] < 1.3 & normalised_gene[,28] >0.7))
+
+different_before_and_after<-subset(normalised_gene, (normalised_gene[,29] >=1.3 | normalised_gene[,29] <=0.7) & 
+                                     (normalised_gene[,28] >=1.3 | normalised_gene[,28] <=0.7))
+
+
+
+different_before_same_after[,15]
+same_before_different_after[,15]
+different_before_and_after[,15]
+
+
+#heatmap for the different subsets 
+library(gplots)
+same_before_different_after<-same_before_different_after[order(same_before_different_after[,25]),]
+x<-heatmap.2(as.matrix(same_before_different_after[,c(24,25,22,23)]), col=redgreen(75),
+             scale="none",key=T, symkey=T, Rowv=T,Colv=FALSE,cexRow=0.5,
+             trace='none',dendrogram="none",cexCol=0.7,srtCol =90,
+             ylab = "", labCol =c("BR","BR+TNF","SC","SC+TNF"),density.info="none",
+             labRow =same_before_different_after[,15])
+different_before_same_after<-different_before_same_after[order(different_before_same_after[,25]),]
+x<-heatmap.2(as.matrix(different_before_same_after[,c(24,25,22,23)]), col=redgreen(75),
+             scale="none",key=T, symkey=T, Rowv=T,Colv=FALSE,cexRow=0.5,
+             trace='none',dendrogram="none",cexCol=0.7,srtCol =90,
+             ylab = "", labCol =c("BR","BR+TNF","SC","SC+TNF"),density.info="none",
+             labRow =different_before_same_after[,15])
+different_before_and_after<-different_before_and_after[order(different_before_and_after[,25]),]
+x<-heatmap.2(as.matrix(different_before_and_after[,c(24,25,22,23)]), col=redgreen(75),
+             scale="none",key=T, symkey=T, Rowv=T,Colv=FALSE,cexRow=0.5,
+             trace='none',dendrogram="none",cexCol=0.7,srtCol =90,
+             ylab = "", labCol =c("BR","BR+TNF","SC","SC+TNF"),density.info="none",
+             labRow =different_before_and_after[,15])
+
+#heatmap for the different subsets Foldchange
+
+same_before_different_after<-same_before_different_after[order(same_before_different_after[,29]),]
+x<-heatmap.2(as.matrix(same_before_different_after[,28:29]), col=redblue(25),
+             scale="none",key=T, symkey=F, Rowv=T,Colv=FALSE,cexRow=0.3,
+             trace='none',dendrogram="none",cexCol=1,srtCol =0,
+             ylab = "", labCol =c("SC/BR","SC+TNF/BR+TNF"),density.info="none",
+             labRow =same_before_different_after[,15])
+
+
+different_before_same_after<-different_before_same_after[order(different_before_same_after[,29]),]
+x<-heatmap.2(as.matrix(different_before_same_after[,28:29]), col=redblue(25),
+             scale="none",key=T, symkey=F, Rowv=T,Colv=FALSE,cexRow=0.3,
+             trace='none',dendrogram="none",cexCol=1,srtCol =0,
+             ylab = "", labCol =c("SC/BR","SC+TNF/BR+TNF"),density.info="none",
+             labRow =different_before_same_after[,15])
+
+different_before_and_after<-different_before_and_after[order(different_before_and_after[,29]),]
+x<-heatmap.2(as.matrix(different_before_and_after[,28:29]), col=redblue(25),
+             scale="none",key=T, symkey=F, Rowv=T,Colv=FALSE,cexRow=0.3,
+             trace='none',dendrogram="none",cexCol=1,srtCol =0,
+             ylab = "", labCol =c("SC/BR","SC+TNF/BR+TNF"),density.info="none",
+             labRow =different_before_same_after[,15])
+
+
+
+########################################################################
+
+
+
+#plot the fold change selection : SC/BR before and SC/TNF after
+
+plot(normalised_gene[,28]~normalised_gene[,29],pch=18,cex=0.8,las=1,col="gray",ylim=c(0,2),xlim=c(0,2),ylab="SC/BR",xlab="SC+TNF/BR+TNF")
+points(same_before_different_after[,28]~same_before_different_after[,29],pch=18,cex=1,las=1,col="purple")
+points(different_before_same_after[,28]~different_before_same_after[,29],pch=18,cex=1,las=1,col="green4")
+points(different_before_and_after[,28]~different_before_and_after[,29],pch=18,cex=1,las=1,col="red")
+abline(h=0.7)
+abline(h=1.3)
+abline(v=0.7)
+abline(v=1.3)
+
+
+
+
+
+
+#plot the egg plots : SC/BR before and SC/TNF after
+plot(normalised_gene[,22]~normalised_gene[,24],pch=18,cex=0.8,las=1,col="gray",ylab="SC",xlab="BR")
+points(same_before_different_after[,22]~same_before_different_after[,24],pch=18,cex=1,las=1,col="purple")
+points(different_before_same_after[,22]~different_before_same_after[,24],pch=18,cex=1,las=1,col="green4")
+points(different_before_and_after[,22]~different_before_and_after[,24],pch=18,cex=1,las=1,col="red")
+
+plot(normalised_gene[,22]~normalised_gene[,24],pch=18,cex=0.8,las=1,col="gray",ylab="SC",xlab="BR")
+points(same_before_different_after[,22]~same_before_different_after[,24],pch=18,cex=1,las=1,col="purple")
+plot(normalised_gene[,22]~normalised_gene[,24],pch=18,cex=0.8,las=1,col="gray",ylab="SC",xlab="BR")
+points(different_before_same_after[,22]~different_before_same_after[,24],pch=18,cex=1,las=1,col="green4")
+plot(normalised_gene[,22]~normalised_gene[,24],pch=18,cex=0.8,las=1,col="gray",ylab="SC",xlab="BR")
+points(different_before_and_after[,22]~different_before_and_after[,24],pch=18,cex=1,las=1,col="red")
+
+plot(normalised_gene[,23]~normalised_gene[,25],pch=18,cex=0.8,las=1,col="gray",ylab="SC+TNF",xlab="BR+TNF")
+points(same_before_different_after[,23]~same_before_different_after[,25],pch=18,cex=1,las=1,col="purple")
+points(different_before_same_after[,23]~different_before_same_after[,25],pch=18,cex=1,las=1,col="green4")
+points(different_before_and_after[,23]~different_before_and_after[,25],pch=18,cex=1,las=1,col="red")
+
+plot(normalised_gene[,23]~normalised_gene[,25],pch=18,cex=0.8,las=1,col="gray",ylab="SC+TNF",xlab="BR+TNF")
+points(same_before_different_after[,23]~same_before_different_after[,25],pch=18,cex=1,las=1,col="purple")
+plot(normalised_gene[,23]~normalised_gene[,25],pch=18,cex=0.8,las=1,col="gray",ylab="SC+TNF",xlab="BR+TNF")
+points(different_before_same_after[,23]~different_before_same_after[,25],pch=18,cex=1,las=1,col="green4")
+plot(normalised_gene[,23]~normalised_gene[,25],pch=18,cex=0.8,las=1,col="gray",ylab="SC+TNF",xlab="BR+TNF")
+points(different_before_and_after[,23]~different_before_and_after[,25],pch=18,cex=1,las=1,col="red")
+
+
+
+
+```
+
+**part4 Gene Ontology for the different sets of genes**
+
+A GO term enrichemt analysis. There was no conditions used and the genes in the microarray were used as background
+```{r}
+ #LIBRARY PREPARATION
+#load the necessary library files and install them if you dont have them
+
+library(org.Mm.eg.db)
+library(GO.db)
+entrez_object <- org.Mm.egGO
+# Get the entrez gene identifiers that are mapped to a GO ID
+mapped_genes <- mappedkeys(entrez_object)
+# Convert to a list
+entrez_to_go <- as.list(entrez_object[mapped_genes])
+go_object <- as.list(org.Mm.egGO2EG)
+
+# Running the Analysis on the different datasets and save the results as a table
+library(GO.db)
+library(GOstats)
+universe <- as.character(normalised_gene[,2])
+
+# run for the dataset :same_before_different_after
+#List of files generated
+
+
+gene_id <- as.character(unique(unlist(same_before_different_after[,2], use.names=F)))
+head(gene_id)
+params <- new('GOHyperGParams',
+              geneIds=gene_id,
+              universeGeneIds=universe,
+              ontology='BP',
+              pvalueCutoff=0.001,
+              conditional=F,
+              testDirection='over',
+              annotation="org.Mm.eg.db"
+)
+hgOver <- hyperGTest(params)
+same_before_different_after_GOBP_Over <- summary(hgOver)
+
+
+
+params <- new('GOHyperGParams',
+              geneIds=gene_id,
+              universeGeneIds=universe,
+              ontology='MF',
+              pvalueCutoff=0.001,
+              conditional=F,
+              testDirection='over',
+              annotation="org.Mm.eg.db"
+)
+hgOver <- hyperGTest(params)
+same_before_different_after_GOMF_Over <- summary(hgOver)
+
+
+params <- new('GOHyperGParams',
+              geneIds=gene_id,
+              universeGeneIds=universe,
+              ontology='CC',
+              pvalueCutoff=0.001,
+              conditional=F,
+              testDirection='over',
+              annotation="org.Mm.eg.db"
+)
+hgOver <- hyperGTest(params)
+same_before_different_after_GOCC_Over <- summary(hgOver)
+
+
+# run for the dataset :different_before_and_after
+
+gene_id <- as.character(unique(unlist(different_before_and_after[,2], use.names=F)))
+head(gene_id)
+params <- new('GOHyperGParams',
+              geneIds=gene_id,
+              universeGeneIds=universe,
+              ontology='BP',
+              pvalueCutoff=0.001,
+              conditional=F,
+              testDirection='over',
+              annotation="org.Mm.eg.db"
+)
+hgOver <- hyperGTest(params)
+different_before_and_after_GOBP_Over <- summary(hgOver)
+
+
+
+params <- new('GOHyperGParams',
+              geneIds=gene_id,
+              universeGeneIds=universe,
+              ontology='MF',
+              pvalueCutoff=0.001,
+              conditional=F,
+              testDirection='over',
+              annotation="org.Mm.eg.db"
+)
+hgOver <- hyperGTest(params)
+different_before_and_after_GOMF_Over <- summary(hgOver)
+
+
+params <- new('GOHyperGParams',
+              geneIds=gene_id,
+              universeGeneIds=universe,
+              ontology='CC',
+              pvalueCutoff=0.001,
+              conditional=F,
+              testDirection='over',
+              annotation="org.Mm.eg.db"
+)
+hgOver <- hyperGTest(params)
+different_before_and_after_GOCC_Over <- summary(hgOver)
+
+
+# run for the dataset :different_before_same_after
+
+gene_id <- as.character(unique(unlist(different_before_same_after[,2], use.names=F)))
+head(gene_id)
+params <- new('GOHyperGParams',
+              geneIds=gene_id,
+              universeGeneIds=universe,
+              ontology='BP',
+              pvalueCutoff=0.001,
+              conditional=F,
+              testDirection='over',
+              annotation="org.Mm.eg.db"
+)
+hgOver <- hyperGTest(params)
+different_before_same_after_GOBP_Over <- summary(hgOver)
+
+
+params <- new('GOHyperGParams',
+              geneIds=gene_id,
+              universeGeneIds=universe,
+              ontology='MF',
+              pvalueCutoff=0.001,
+              conditional=F,
+              testDirection='over',
+              annotation="org.Mm.eg.db"
+)
+hgOver <- hyperGTest(params)
+different_before_same_after_GOMF_Over <- summary(hgOver)
+
+
+params <- new('GOHyperGParams',
+              geneIds=gene_id,
+              universeGeneIds=universe,
+              ontology='CC',
+              pvalueCutoff=0.001,
+              conditional=F,
+              testDirection='over',
+              annotation="org.Mm.eg.db"
+)
+hgOver <- hyperGTest(params)
+different_before_same_after_GOCC_Over <- summary(hgOver)
+
+
+# run for the dataset :changing_in_Circle_and_Rectangle_whole
+#List of files generated
+
+gene_id <- as.character(unique(unlist(changing_in_Circle_and_Rectangle[,2], use.names=F)))
+head(gene_id)
+params <- new('GOHyperGParams',
+              geneIds=gene_id,
+              universeGeneIds=universe,
+              ontology='BP',
+              pvalueCutoff=0.001,
+              conditional=F,
+              testDirection='over',
+              annotation="org.Mm.eg.db"
+)
+hgOver <- hyperGTest(params)
+changing_in_Circle_and_Rectangle_whole_GOBP_Over <- summary(hgOver)
+
+
+
+params <- new('GOHyperGParams',
+              geneIds=gene_id,
+              universeGeneIds=universe,
+              ontology='MF',
+              pvalueCutoff=0.001,
+              conditional=F,
+              testDirection='over',
+              annotation="org.Mm.eg.db"
+)
+hgOver <- hyperGTest(params)
+changing_in_Circle_and_Rectangle_whole_GOMF_Over <- summary(hgOver)
+
+
+params <- new('GOHyperGParams',
+              geneIds=gene_id,
+              universeGeneIds=universe,
+              ontology='CC',
+              pvalueCutoff=0.001,
+              conditional=F,
+              testDirection='over',
+              annotation="org.Mm.eg.db"
+)
+hgOver <- hyperGTest(params)
+changing_in_Circle_and_Rectangle_whole_GOCC_Over <- summary(hgOver)
+
+
+# run for the dataset :changing_in_Circle_not_Rectangle_whole
+
+gene_id <- as.character(unique(unlist(changing_in_Circle_not_Rectangle[,2], use.names=F)))
+head(gene_id)
+params <- new('GOHyperGParams',
+              geneIds=gene_id,
+              universeGeneIds=universe,
+              ontology='BP',
+              pvalueCutoff=0.001,
+              conditional=F,
+              testDirection='over',
+              annotation="org.Mm.eg.db"
+)
+hgOver <- hyperGTest(params)
+changing_in_Circle_not_Rectangle_whole_GOBP_Over <- summary(hgOver)
+
+
+
+params <- new('GOHyperGParams',
+              geneIds=gene_id,
+              universeGeneIds=universe,
+              ontology='MF',
+              pvalueCutoff=0.001,
+              conditional=F,
+              testDirection='over',
+              annotation="org.Mm.eg.db"
+)
+hgOver <- hyperGTest(params)
+changing_in_Circle_not_Rectangle_whole_GOMF_Over <- summary(hgOver)
+
+
+params <- new('GOHyperGParams',
+              geneIds=gene_id,
+              universeGeneIds=universe,
+              ontology='CC',
+              pvalueCutoff=0.001,
+              conditional=F,
+              testDirection='over',
+              annotation="org.Mm.eg.db"
+)
+hgOver <- hyperGTest(params)
+changing_in_Circle_not_Rectangle_whole_GOCC_Over <- summary(hgOver)
+
+# run for the dataset :changing_in_Rectangle_not_circle_whole
+
+gene_id <- as.character(unique(unlist(changing_in_Rectangle_not_circle[,2], use.names=F)))
+head(gene_id)
+params <- new('GOHyperGParams',
+              geneIds=gene_id,
+              universeGeneIds=universe,
+              ontology='BP',
+              pvalueCutoff=0.001,
+              conditional=F,
+              testDirection='over',
+              annotation="org.Mm.eg.db"
+)
+hgOver <- hyperGTest(params)
+changing_in_Rectangle_not_circle_whole_GOBP_Over <- summary(hgOver)
+
+
+
+params <- new('GOHyperGParams',
+              geneIds=gene_id,
+              universeGeneIds=universe,
+              ontology='MF',
+              pvalueCutoff=0.001,
+              conditional=F,
+              testDirection='over',
+              annotation="org.Mm.eg.db"
+)
+hgOver <- hyperGTest(params)
+changing_in_Rectangle_not_circle_whole_GOMF_Over <- summary(hgOver)
+
+
+params <- new('GOHyperGParams',
+              geneIds=gene_id,
+              universeGeneIds=universe,
+              ontology='CC',
+              pvalueCutoff=0.001,
+              conditional=F,
+              testDirection='over',
+              annotation="org.Mm.eg.db"
+)
+hgOver <- hyperGTest(params)
+changing_in_Rectangle_not_circle_whole_GOCC_Over <- summary(hgOver)
+
+
+## REPRESENTING THE GO ENRICHMENT(UNIVERSAL GENE SET) ANALYSIS OF THE DIFFERENT DATASET
+
+#load the libraries
+library(gplots)
+
+#Prepare the datasets (Merge and remove the Inf and NAs)
+GO_Before_and_after_treatment_BP_over_expressed <- merge(same_before_different_after_GOBP_Over[,c(7,3)], different_before_and_after_GOBP_Over[,c(7,3)], by='Term',all=T)
+
+GO_Before_and_after_treatment_BP_over_expressed<- merge(GO_Before_and_after_treatment_BP_over_expressed, different_before_same_after_GOBP_Over[,c(7,3)], by='Term',all=T)
+
+colnames(GO_Before_and_after_treatment_BP_over_expressed)<-c("Term","same_before_different_after_GOBP_Over",
+                                                             "different_before_and_after_GOBP_Over",
+                                                             "different_before_same_after_GOBP_Over")
+
+GO_Before_and_after_treatment_BP_over_expressed[is.na(GO_Before_and_after_treatment_BP_over_expressed)]<-0
+GO_Before_and_after_treatment_BP_over_expressed<-do.call(data.frame,lapply(GO_Before_and_after_treatment_BP_over_expressed, function(x) replace(x, is.infinite(x),NA)))
+GO_Before_and_after_treatment_BP_over_expressed[is.na(GO_Before_and_after_treatment_BP_over_expressed)]<-0
+################################################
+
+GO_Before_and_after_treatment_BP_over_expressed <- merge(same_before_different_after_GOBP_Over[,c(7,3)], different_before_and_after_GOBP_Over[,c(7,3)], by='Term',all=T)
+
+GO_Before_and_after_treatment_BP_over_expressed<- merge(GO_Before_and_after_treatment_BP_over_expressed, different_before_same_after_GOBP_Over[,c(7,3)], by='Term',all=T)
+
+colnames(GO_Before_and_after_treatment_BP_over_expressed)<-c("Term","same_before_different_after_GOBP_Over",
+                                                             "different_before_and_after_GOBP_Over",
+                                                             "different_before_same_after_GOBP_Over")
+
+GO_Before_and_after_treatment_BP_over_expressed[is.na(GO_Before_and_after_treatment_BP_over_expressed)]<-0
+GO_Before_and_after_treatment_BP_over_expressed<-do.call(data.frame,lapply(GO_Before_and_after_treatment_BP_over_expressed, function(x) replace(x, is.infinite(x),NA)))
+GO_Before_and_after_treatment_BP_over_expressed[is.na(GO_Before_and_after_treatment_BP_over_expressed)]<-0
+################################################
+
+
+GO_Before_and_after_treatment_MF_over_expressed <- merge(same_before_different_after_GOMF_Over[,c(7,3)], different_before_and_after_GOMF_Over[,c(7,3)], by='Term',all=T)
+
+GO_Before_and_after_treatment_MF_over_expressed<- merge(GO_Before_and_after_treatment_MF_over_expressed, different_before_same_after_GOMF_Over[,c(7,3)], by='Term',all=T)
+
+colnames(GO_Before_and_after_treatment_MF_over_expressed)<-c("Term","same_before_different_after_GOMF_Over",
+                                                             "different_before_and_after_GOMF_Over",
+                                                             "different_before_same_after_GOMF_Over")
+
+GO_Before_and_after_treatment_MF_over_expressed[is.na(GO_Before_and_after_treatment_MF_over_expressed)]<-0
+GO_Before_and_after_treatment_MF_over_expressed<-do.call(data.frame,lapply(GO_Before_and_after_treatment_MF_over_expressed, function(x) replace(x, is.infinite(x),NA)))
+GO_Before_and_after_treatment_MF_over_expressed[is.na(GO_Before_and_after_treatment_MF_over_expressed)]<-0
+################################################
+
+
+GO_Before_and_after_treatment_CC_over_expressed <- merge(same_before_different_after_GOCC_Over[,c(7,3)], different_before_and_after_GOCC_Over[,c(7,3)], by='Term',all=T)
+
+GO_Before_and_after_treatment_CC_over_expressed<- merge(GO_Before_and_after_treatment_CC_over_expressed, different_before_same_after_GOCC_Over[,c(7,3)], by='Term',all=T)
+
+colnames(GO_Before_and_after_treatment_CC_over_expressed)<-c("Term","same_before_different_after_GOCC_Over",
+                                                             "different_before_and_after_GOCC_Over",
+                                                             "different_before_same_after_GOCC_Over")
+
+GO_Before_and_after_treatment_CC_over_expressed[is.na(GO_Before_and_after_treatment_CC_over_expressed)]<-0
+GO_Before_and_after_treatment_CC_over_expressed<-do.call(data.frame,lapply(GO_Before_and_after_treatment_CC_over_expressed, function(x) replace(x, is.infinite(x),NA)))
+GO_Before_and_after_treatment_CC_over_expressed[is.na(GO_Before_and_after_treatment_CC_over_expressed)]<-0
+
+######################################################
+
+GO_Geometry_specific_TNF_BP_over_expressed <- merge(changing_in_Circle_and_Rectangle_whole_GOBP_Over[,c(7,3)], changing_in_Circle_not_Rectangle_whole_GOBP_Over[,c(7,3)], by='Term',all=T)
+
+GO_Geometry_specific_TNF_BP_over_expressed <- merge(GO_Geometry_specific_TNF_BP_over_expressed, changing_in_Rectangle_not_circle_whole_GOBP_Over[,c(7,3)], by='Term',all=T)
+
+colnames(GO_Geometry_specific_TNF_BP_over_expressed)<-c("Term","changing_in_Circle_and_Rectangle_whole_GOBP_Over",
+                                                        "changing_in_Circle_not_Rectangle_whole_GOBP_Over",
+                                                        "changing_in_Rectangle_not_circle_whole_GOBP_Over")
+
+GO_Geometry_specific_TNF_BP_over_expressed[is.na(GO_Geometry_specific_TNF_BP_over_expressed)]<-0
+GO_Geometry_specific_TNF_BP_over_expressed<-do.call(data.frame,lapply(GO_Geometry_specific_TNF_BP_over_expressed, function(x) replace(x, is.infinite(x),NA)))
+GO_Geometry_specific_TNF_BP_over_expressed[is.na(GO_Geometry_specific_TNF_BP_over_expressed)]<-0
+
+######################################################
+
+GO_Geometry_specific_TNF_MF_over_expressed <- merge(changing_in_Circle_and_Rectangle_whole_GOMF_Over[,c(7,3)], changing_in_Circle_not_Rectangle_whole_GOMF_Over[,c(7,3)], by='Term',all=T)
+
+GO_Geometry_specific_TNF_MF_over_expressed <- merge(GO_Geometry_specific_TNF_MF_over_expressed, changing_in_Rectangle_not_circle_whole_GOMF_Over[,c(7,3)], by='Term',all=T)
+
+colnames(GO_Geometry_specific_TNF_MF_over_expressed)<-c("Term","changing_in_Circle_and_Rectangle_whole_GOMF_Over",
+                                                        "changing_in_Circle_not_Rectangle_whole_GOMF_Over",
+                                                        "changing_in_Rectangle_not_circle_whole_GOMF_Over")
+
+GO_Geometry_specific_TNF_MF_over_expressed[is.na(GO_Geometry_specific_TNF_MF_over_expressed)]<-0
+GO_Geometry_specific_TNF_MF_over_expressed<-do.call(data.frame,lapply(GO_Geometry_specific_TNF_MF_over_expressed, function(x) replace(x, is.infinite(x),NA)))
+GO_Geometry_specific_TNF_MF_over_expressed[is.na(GO_Geometry_specific_TNF_MF_over_expressed)]<-0
+
+###########################################################
+
+GO_Geometry_specific_TNF_CC_over_expressed <- merge(changing_in_Circle_and_Rectangle_whole_GOCC_Over[,c(7,3)], changing_in_Circle_not_Rectangle_whole_GOCC_Over[,c(7,3)], by='Term',all=T)
+
+GO_Geometry_specific_TNF_CC_over_expressed <- merge(GO_Geometry_specific_TNF_CC_over_expressed, changing_in_Rectangle_not_circle_whole_GOCC_Over[,c(7,3)], by='Term',all=T)
+
+colnames(GO_Geometry_specific_TNF_CC_over_expressed)<-c("Term","changing_in_Circle_and_Rectangle_whole_GOCC_Over",
+                                                        "changing_in_Circle_not_Rectangle_whole_GOCC_Over",
+                                                        "changing_in_Rectangle_not_circle_whole_GOCC_Over")
+
+GO_Geometry_specific_TNF_CC_over_expressed[is.na(GO_Geometry_specific_TNF_CC_over_expressed)]<-0
+GO_Geometry_specific_TNF_CC_over_expressed<-do.call(data.frame,lapply(GO_Geometry_specific_TNF_CC_over_expressed, function(x) replace(x, is.infinite(x),NA)))
+GO_Geometry_specific_TNF_CC_over_expressed[is.na(GO_Geometry_specific_TNF_CC_over_expressed)]<-0
+
+
+#prepare heatmaps for visualisation
+
+
+par(mar=c(4,4,4,15)+1) 
+x<-log(GO_Before_and_after_treatment_BP_over_expressed[,2:4],base=2)
+x<-do.call(data.frame,lapply(x, function(x) replace(x, is.infinite(x),NA)))
+x[is.na(x)]<-0
+x[,4]<-GO_Before_and_after_treatment_BP_over_expressed[,1]
+x<-x[order(-x[,3]),]
+x<-x[order(-x[,2]),]
+x<-x[order(-x[,1]),]
+
+
+heatmap.2(as.matrix(x[,1:3]), col=topo.colors(75),
+          scale="none",key=T, symkey=F, Rowv=F,Colv=FALSE,cexRow=0.5,
+          trace='none',dendrogram="none",cexCol=0.7,srtCol =90,key.title=" ",
+          ylab = "",labRow = x[,4],
+          labCol =colnames(GO_Before_and_after_treatment_BP_over_expressed)[2:4]
+          ,density.info="none",margins=c(4,20))
+
+
+par(mar=c(4,4,4,15)+1) 
+x<-log(GO_Before_and_after_treatment_MF_over_expressed[,2:4],base=2)
+x<-do.call(data.frame,lapply(x, function(x) replace(x, is.infinite(x),NA)))
+x[is.na(x)]<-0
+x[,4]<-GO_Before_and_after_treatment_MF_over_expressed[,1]
+x<-x[order(-x[,3]),]
+x<-x[order(-x[,2]),]
+x<-x[order(-x[,1]),]
+
+
+heatmap.2(as.matrix(x[,1:3]), col=topo.colors(75),
+          scale="none",key=T, symkey=F, Rowv=F,Colv=FALSE,cexRow=0.5,
+          trace='none',dendrogram="none",cexCol=0.7,srtCol =90,key.title=" ",
+          ylab = "",labRow = x[,4],
+          labCol =colnames(GO_Before_and_after_treatment_MF_over_expressed)[2:4]
+          ,density.info="none",margins=c(4,20))
+
+
+
+par(mar=c(4,4,4,15)+1) 
+x<-log(GO_Before_and_after_treatment_CC_over_expressed[,2:4],base=2)
+x<-do.call(data.frame,lapply(x, function(x) replace(x, is.infinite(x),NA)))
+x[is.na(x)]<-0
+x[,4]<-GO_Before_and_after_treatment_CC_over_expressed[,1]
+x<-x[order(-x[,3]),]
+x<-x[order(-x[,2]),]
+x<-x[order(-x[,1]),]
+
+
+heatmap.2(as.matrix(x[,1:3]), col=topo.colors(75),
+          scale="none",key=T, symkey=F, Rowv=F,Colv=FALSE,cexRow=0.5,
+          trace='none',dendrogram="none",cexCol=0.7,srtCol =90,key.title=" ",
+          ylab = "",labRow = x[,4],
+          labCol =colnames(GO_Before_and_after_treatment_CC_over_expressed)[2:4]
+          ,density.info="none",margins=c(4,20))
+
+
+
+x<-log(GO_Geometry_specific_TNF_BP_over_expressed[,2:4],base=2)
+x<-do.call(data.frame,lapply(x, function(x) replace(x, is.infinite(x),NA)))
+x[is.na(x)]<-0
+x[,4]<-GO_Geometry_specific_TNF_BP_over_expressed[,1]
+x<-x[order(-x[,3]),]
+x<-x[order(-x[,2]),]
+x<-x[order(-x[,1]),]
+
+heatmap.2(as.matrix(x[,1:3]), col=terrain.colors(75),
+          scale="none",key=T, symkey=F, Rowv=F,Colv=FALSE,cexRow=0.5,
+          trace='none',dendrogram="none",cexCol=0.7,srtCol =90,key.title=" ",
+          ylab = "",labRow = x[,4],
+          labCol =colnames(GO_Geometry_specific_TNF_BP_over_expressed)[2:4]
+          ,density.info="none",margins=c(4,20))
+
+
+x<-log(GO_Geometry_specific_TNF_MF_over_expressed[,2:4],base=2)
+x<-do.call(data.frame,lapply(x, function(x) replace(x, is.infinite(x),NA)))
+x[is.na(x)]<-0
+x[,4]<-GO_Geometry_specific_TNF_MF_over_expressed[,1]
+x<-x[order(-x[,3]),]
+x<-x[order(-x[,2]),]
+x<-x[order(-x[,1]),]
+heatmap.2(as.matrix(x[,1:3]), col=terrain.colors(75),
+          scale="none",key=T, symkey=F, Rowv=F,Colv=FALSE,cexRow=0.5,
+          trace='none',dendrogram="none",cexCol=0.7,srtCol =90,key.title=" ",
+          ylab = "",labRow = x[,4],
+          labCol =colnames(GO_Geometry_specific_TNF_MF_over_expressed)[2:4]
+          ,density.info="none",margins=c(4,20))
+
+
+
+par(mar=c(4,4,4,15)+1) 
+x<-log(GO_Geometry_specific_TNF_CC_over_expressed[,2:4],base=2)
+x<-do.call(data.frame,lapply(x, function(x) replace(x, is.infinite(x),NA)))
+x[is.na(x)]<-0
+x[,4]<-GO_Geometry_specific_TNF_CC_over_expressed[,1]
+x<-x[order(-x[,3]),]
+x<-x[order(-x[,2]),]
+x<-x[order(-x[,1]),]
+heatmap.2(as.matrix(x[,1:3]), col=terrain.colors(75),
+          scale="none",key=T, symkey=F, Rowv=F,Colv=FALSE,cexRow=0.8,
+          trace='none',dendrogram="none",cexCol=0.7,srtCol =90,key.title=" ",
+          ylab = "",labRow = x[,4],
+          labCol =colnames(GO_Geometry_specific_TNF_CC_over_expressed)[2:4]
+          ,density.info="none",margins=c(4,20))
+
+
+
+
+```
+
+
+
+**Part5: Proliferative nd apoptotic genes**
+These genes were obtained from:"http://www.sabiosciences.com/rt_pcr_product/HTML/PAMM-012A.html and" and "http://www.sabiosciences.com/rt_pcr_product/HTML/PAMM-020Z.html"
+```{r}
+andy_genes <- read.csv("D:/saradha/Anindo/microarray_analysis/Final run/andy_genes.csv", stringsAsFactors=FALSE)
+
+
+Induction_Apoptosis<-unique(c(andy_genes[,3],andy_genes[,4],andy_genes[,5],andy_genes[,6],andy_genes[,7],andy_genes[,8]))
+subseta<-subset(normalised_gene,normalised_gene[,15] %in% Induction_Apoptosis)
+xs<-subseta[order(subseta[,24]),c(15,24,25,22,23)]
+par(font.axis=2,font.lab=2)
+x<-heatmap.2(as.matrix(xs[,-1]), col=redgreen(75),
+             scale="none",key=F, symkey=T, Rowv=F,Colv=FALSE,cexRow=0.6,
+             trace='none',dendrogram="none",cexCol=0.7,srtCol =90,
+             ylab = "",labRow = xs[,1], labCol =c("BR","BR+TNF","SC","SC+TNF"))
+par(font.axis=2,font.lab=2)
+x<-colSums(xs[,2:5])
+barplot(x,las=1,ylab="Summed Zscore",names =c("BR","BR+TNF","SC","SC+TNF"),ylim=c(-30,30))
+box()
+abline(h=0)
+
+
+
+Cell_proliferation<-unique(c(andy_genes[,12],andy_genes[,13],andy_genes[,14],andy_genes[,15],andy_genes[,17]))
+subsetb<-subset(normalised_gene,normalised_gene[,15] %in% Cell_proliferation)
+xt<-subsetb[order(subsetb[,24]),c(15,24,25,22,23)]
+par(font.axis=2,font.lab=2)
+x<-heatmap.2(as.matrix(xt[,-1]), col=redgreen(75),
+             scale="none",key=F, symkey=T, Rowv=F,Colv=FALSE,cexRow=0.5,
+             trace='none',dendrogram="none",cexCol=0.7,srtCol =90,
+             ylab = "",labRow = xt[,1], labCol =c("BR","BR+TNF","SC","SC+TNF"))
+par(font.axis=2,font.lab=2)
+x<-colSums(xt[,2:5])
+barplot(x,las=1,ylab="Summed Zscore",names =c("BR","BR+TNF","SC","SC+TNF"),ylim=c(-25,25))
+box()
+abline(h=0)
+
+
+
+
+```
+
+
+
