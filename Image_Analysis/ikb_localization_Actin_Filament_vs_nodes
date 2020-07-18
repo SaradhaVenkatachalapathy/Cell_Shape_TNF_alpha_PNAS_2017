@@ -1,0 +1,399 @@
+/* A macro to get the ikb intensity on the filamentous, nodal and total F-actin content in the nucleus and the total cell. The Actin is in chanel a nucleus is in channel c and IKB in chanell b. 
+The output are the background processed image, the rois for the nodes, filaments nuclear and total actin and the corresponding results per slice. 
+It also measures total intensity of iKb in the cell using Sum intensity projection. 
+It generates a summerised results table for the comparison of total and mean ikb intensity over various actin filaments.
+It also generates the intensity of the various Actin filaments with and without backgroud subtraction. 
+IMPORTANT: It is assumed that there is only one cell per image. The measurements are done for one image and no background subtraction is performed on the IKB channel 
+
+IMPORTANT:check the channel numbers
+AUTHOR: Saradha Venkatachalapathy
+*/
+
+ac=2; //actin
+b=3; //IKB
+c=1  //nucleus
+
+dir1=getDirectory("Please select/enter the image directory");
+//dir2=getDirectory("Please select the results directory");
+dir2= dir1+"\\Results\\";
+dir3=dir2+"\\Rois\\";
+dir4=dir2+"\\Measurements\\";
+dir5=dir2+"\\BG_subtracted_actin_images\\";
+dir6=dir2+"\\Slice_by_slice_actin_rois_images\\";
+dir7=dir2+"\\ROI_overlaid_on_max_int_projected_IKB_channel\\";
+
+filelist=getFileList(dir1);
+File.makeDirectory(dir2);
+File.makeDirectory(dir3);
+File.makeDirectory(dir4);
+File.makeDirectory(dir5);
+File.makeDirectory(dir6);
+File.makeDirectory(dir7);
+
+title=newArray(filelist.length);
+filament_actin=newArray(filelist.length);
+node_actin=newArray(filelist.length);
+all_actin=newArray(filelist.length);
+nuclear_actin=newArray(filelist.length);
+total_ikb=newArray(filelist.length);
+
+filament_actin_mean=newArray(filelist.length);
+node_actin_mean=newArray(filelist.length);
+all_actin_mean=newArray(filelist.length);
+nuclear_actin_mean=newArray(filelist.length);
+total_ikb_mean=newArray(filelist.length);
+
+number_filaments=newArray(filelist.length);
+area_filaments=newArray(filelist.length);
+number_nodes=newArray(filelist.length);
+area_nodes=newArray(filelist.length);
+area_total_actin=newArray(filelist.length);
+Filament_intensity_bg=newArray(filelist.length);
+Filament_intensity=newArray(filelist.length);
+Filament_intensity_mean=newArray(filelist.length);
+Nodal_intensity_bg=newArray(filelist.length);
+Nodal_intensity=newArray(filelist.length);
+Nodal_intensity_mean=newArray(filelist.length);
+Actin_intensity_bg=newArray(filelist.length);
+Actin_intensity=newArray(filelist.length);
+Actin_intensity_mean=newArray(filelist.length);
+
+
+for( i=0; i<filelist.length; i++){
+	
+	path=dir1+filelist[i];
+	run("Bio-Formats", "open=path autoscale color_mode=Default rois_import=[ROI manager] specify_range view=Hyperstack stack_order=XYCZT c_begin=ac c_end=ac c_step=1 ");
+	run("Grays");
+	title[i]=getTitle;
+	name = getTitle;
+   	index = lastIndexOf(name, ".");
+   	if (index!=-1) name = substring(name, 0, index);
+
+	run("Clear Results");
+	
+	filament_actin[i]=0;
+	node_actin[i]=0;
+	nuclear_actin[i]=0;
+	all_actin[i]=0;
+	total_ikb[i]=0;
+	filament_actin_mean[i]=0;
+	node_actin_mean[i]=0;
+	all_actin_mean[i]=0;
+	nuclear_actin_mean[i]=0;
+	total_ikb_mean[i]=0;
+
+	area_filaments[i]=0;
+	area_nodes[i]=0;
+	area_total_actin[i]=0;
+	Filament_intensity[i]=0;
+    Nodal_intensity[i]=0;
+	Actin_intensity[i]=0;
+	Filament_intensity_bg[i]=0;
+    Nodal_intensity_bg[i]=0;
+	Actin_intensity_bg[i]=0;
+
+    Filament_intensity_mean[i]=0;
+    Nodal_intensity_mean[i]=0;
+	Actin_intensity_mean[i]=0;
+	
+   	//Backgroud subtraction and save the image//
+	run("Bandpass Filter...", "filter_large=1300 filter_small=2 suppress=None tolerance=0 process");
+	run("Subtract Background...", "rolling=6 stack");
+	namet0 = name + ".tiff";
+	saveAs("Tiff", dir5 + namet0);
+
+
+	//measure and save the different kinds of Actin//
+	run("Set Measurements...", "area mean standard modal min centroid center perimeter bounding fit shape feret's integrated median skewness kurtosis area_fraction stack limit display redirect=None decimal=4");
+	setAutoThreshold("Default dark stack");
+	
+	//run("Threshold...");
+	//waitForUser("Please check the threshold");
+	run("Analyze Particles...", "size=1-Infinity circularity=0.00-0.8 display exclude add stack ");
+	namet= name+ "Results_filaments.xls";
+	saveAs("Results", dir4 +namet);
+	number_filaments[i]=nResults;
+	for(k=0;k<nResults;k++){
+		area_filaments[i]=area_filaments[i]+getResult("Area",k);
+		Filament_intensity_bg[i]=Filament_intensity_bg[i]+getResult("RawIntDen",k);
+			}
+	namet1 = name + "Roi_filamentous_actin.zip";
+	roiManager("Save", dir3+ namet1);
+	roiManager("reset")
+	run("Clear Results");
+	
+	run("Analyze Particles...", "size=0.2-1 circularity=0.8-1 display exclude add stack ");
+	namet= name+ "Results_Nodes.xls";
+	saveAs("Results", dir4 +namet);
+	number_nodes[i]=nResults;
+	for(k=0;k<nResults;k++){
+		area_nodes[i]=area_nodes[i]+getResult("Area",k);
+		Nodal_intensity_bg[i]=Nodal_intensity_bg[i]+getResult("RawIntDen",k);
+			}
+	namet2 = name + "Roi_nodes_actin.zip";
+	roiManager("Save", dir3 + namet2);
+	roiManager("reset")
+	run("Clear Results");
+
+	
+	run("Analyze Particles...", "size=0-Infinity circularity=0-1 display exclude add stack ");
+	namet= name+ "Results_all_actin.xls";
+	saveAs("Results", dir4 +namet);
+	for(k=0;k<nResults;k++){
+		area_total_actin[i]=area_total_actin[i]+getResult("Area",k);
+		Actin_intensity_bg[i]=Actin_intensity_bg[i]+getResult("RawIntDen",k);
+			}
+	namet3 = name + "Roi_all_actin.zip";
+	roiManager("Save", dir3 + namet3);
+	roiManager("reset")
+	run("Clear Results");
+	
+	run("Analyze Particles...", "size=1-Infinity circularity=0.00-0.8 exclude add stack ");
+	run("Z Project...", "projection=[Max Intensity]");
+	run("Grays");
+	namet = name + "ZPproject_max_intensity.tiff";
+	saveAs("Tiff", dir6 + namet);
+	roiManager("Show All without labels");
+	run("Flatten");
+	namet = name + "ZPproject_filamentous_actin_overlay.tiff";
+	saveAs("Tiff", dir6 + namet);
+	close();
+	roiManager("reset")
+
+	selectWindow(namet0);
+	run("Analyze Particles...", "size=0.2-1 circularity=0.8-1 exclude add stack ");
+	run("Z Project...", "projection=[Max Intensity]");
+	run("Grays");
+	namet = name + "ZPproject_max_intensity.tiff";
+	saveAs("Tiff", dir6 + namet);
+	roiManager("Show All without labels");
+	run("Flatten");
+	namet = name + "ZPproject_nodal_actin_overlay.tiff";
+	saveAs("Tiff", dir6 + namet);
+	close();
+	
+	run("Close All");
+	roiManager("reset")
+
+	// Find the nuclear location
+	run("Bio-Formats", "open=path autoscale color_mode=Default rois_import=[ROI manager] specify_range view=Hyperstack stack_order=XYCZT c_begin=c c_end=c c_step=1 ");
+	run("Grays");
+	run("Smooth", "stack");
+	setAutoThreshold("Huang dark stack");
+	run("Analyze Particles...", "size=25-Infinity display exclude include add stack");
+	namet= name+ "Results_nucleus.xls";
+	saveAs("Results", dir4 +namet);
+	
+	run("Z Project...", "projection=[Max Intensity]");
+	namet = name + "ZPproject_max_intensity_nuclei_overlay.tiff";
+	roiManager("Show All without labels");
+	run("Flatten");
+	saveAs("Tiff", dir6 + namet);
+	namet4 = name + "Roi_nucleus.zip";
+	roiManager("Save", dir3+ namet4);
+	roiManager("reset");
+	run("Close All");
+	
+	
+	// open the IKB channel and measure instensity in the various rois and whole cell
+	run("Bio-Formats", "open=path autoscale color_mode=Default rois_import=[ROI manager] specify_range view=Hyperstack stack_order=XYCZT c_begin=b c_end=b c_step=1 ");
+	
+	//filaments
+	open(dir3+ namet1);
+	roiManager("multi-measure")
+	namet= name+ "Results_ikb_filaments.xls";
+	saveAs("Results", dir4 +namet);
+	roiManager("reset");
+	for (a=0; a<nResults(); a++) {
+    filament_actin[i]=filament_actin[i]+getResult("RawIntDen",a);
+    filament_actin_mean[i]=filament_actin_mean[i]+getResult("Mean",a);
+	}
+	filament_actin_mean[i]=filament_actin_mean[i]/nResults;
+	run("Clear Results");
+
+	//node
+	open(dir3+ namet2);
+	roiManager("multi-measure")
+	namet= name+ "Results_ikb_nodes.xls";
+	saveAs("Results", dir4 +namet);
+	roiManager("reset");
+	for (a=0; a<nResults(); a++) {
+    node_actin[i]=node_actin[i]+getResult("RawIntDen",a);
+    node_actin_mean[i]=node_actin_mean[i]+getResult("Mean",a);
+	}
+	node_actin_mean[i]=node_actin_mean[i]/nResults;
+	run("Clear Results");
+
+	//All_actin
+	open(dir3+ namet3);
+	roiManager("multi-measure")
+	namet= name+ "Results_ikb_all_actin.xls";
+	saveAs("Results", dir4 +namet);
+	roiManager("reset")
+	for (a=0; a<nResults(); a++) {
+    all_actin[i]=all_actin[i]+getResult("RawIntDen",a);
+    all_actin_mean[i]=all_actin_mean[i]+getResult("Mean",a);
+	}
+	all_actin_mean[i]=all_actin_mean[i]/nResults;
+	run("Clear Results");
+	
+	//nucleus
+	open(dir3+ namet4);
+	roiManager("multi-measure")
+	namet= name+ "Results_ikb_nucleus.xls";
+	saveAs("Results", dir4 +namet);
+	roiManager("reset")
+	for (a=0; a<nResults(); a++) {
+    nuclear_actin[i]=nuclear_actin[i]+getResult("RawIntDen",a);
+    nuclear_actin_mean[i]=nuclear_actin_mean[i]+getResult("Mean",a);
+	}
+	nuclear_actin_mean[i]=nuclear_actin_mean[i]/nResults;
+	run("Clear Results");
+
+	//total_ikb
+	run("Z Project...", "projection=[Sum Slices]");
+	run("Measure");
+	namet= name+ "Results_ikb_zproject.xls";
+	saveAs("Results", dir4 +namet);
+	for (a=0; a<nResults(); a++) {
+    total_ikb[i]=total_ikb[i]+getResult("RawIntDen",a);
+    total_ikb_mean[i]=total_ikb_mean[i]+getResult("Mean",a);
+	}
+	total_ikb_mean[i]=total_ikb_mean[i]/nResults;
+	run("Clear Results");
+	run("Close All");
+
+	// generate the images for IKB overlaid with the corressponding ROIs
+
+	run("Bio-Formats", "open=path autoscale color_mode=Default rois_import=[ROI manager] specify_range view=Hyperstack stack_order=XYCZT c_begin=b c_end=b c_step=1 ");
+	run("Grays");
+	run("Z Project...", "projection=[Max Intensity]");
+	namet= name+"zproject_max_intensity_ikb.tiff";
+	saveAs("Tiff", dir7 + namet);
+	
+	//filaments
+	open(dir3+ namet1);
+	namet = name + "ZPproject_max_intensity(IKB)_filaments_overlay.tiff";
+	roiManager("Show All without labels");
+	run("Flatten");
+	saveAs("Tiff", dir7 + namet);
+	roiManager("reset");
+	close();
+	
+	//node
+	open(dir3+ namet2);
+	namet = name + "ZPproject_max_intensity(IKB)_nodes_overlay.tiff";
+	roiManager("Show All without labels");
+	run("Flatten");
+	saveAs("Tiff", dir7 + namet);
+	roiManager("reset");
+	close();
+	
+	//All_actin
+	open(dir3+ namet3);
+	namet = name + "ZPproject_max_intensity(IKB)_all_actin_overlay.tiff";
+	roiManager("Show All without labels");
+	run("Flatten");
+	saveAs("Tiff", dir7 + namet);
+	roiManager("reset");
+	close();
+	
+	//nucleus
+	open(dir3+ namet4);
+	namet = name + "ZPproject_max_intensity(IKB)_nucleus_overlay.tiff";
+	roiManager("Show All without labels");
+	run("Flatten");
+	saveAs("Tiff", dir7 + namet);
+	roiManager("reset");
+	close();
+	run("Close All");
+
+
+	// Measure various Actin intensity_no background subtraction.
+	run("Bio-Formats", "open=path autoscale color_mode=Default rois_import=[ROI manager] specify_range view=Hyperstack stack_order=XYCZT c_begin=ac c_end=ac c_step=1 ");
+	run("Grays");
+	
+	//filaments
+	open(dir3+ namet1);
+	roiManager("multi-measure")
+	namet= name+ "Results_actin_filaments.xls";
+	saveAs("Results", dir4 +namet);
+	roiManager("reset");
+	for (a=0; a<nResults(); a++) {
+    Filament_intensity[i]=Filament_intensity[i]+getResult("RawIntDen",a);
+    Filament_intensity_mean[i]=Filament_intensity_mean[i]+getResult("Mean",a);
+	}
+	Filament_intensity_mean[i]=Filament_intensity_mean[i]/nResults;
+	run("Clear Results");
+
+	//node
+	open(dir3+ namet2);
+	roiManager("multi-measure")
+	namet= name+ "Results_actin_nodes.xls";
+	saveAs("Results", dir4 +namet);
+	roiManager("reset");
+	for (a=0; a<nResults(); a++) {
+    Nodal_intensity[i]=Nodal_intensity[i]+getResult("RawIntDen",a);
+    Nodal_intensity_mean[i]=Nodal_intensity_mean[i]+getResult("Mean",a);
+	}
+	Nodal_intensity_mean[i]=Nodal_intensity_mean[i]/nResults;
+	run("Clear Results");
+
+	//All_actin
+	open(dir3+ namet3);
+	roiManager("multi-measure")
+	namet= name+ "Results_actin_all_actin.xls";
+	saveAs("Results", dir4 +namet);
+	roiManager("reset")
+	for (a=0; a<nResults(); a++) {
+    Actin_intensity[i]=Actin_intensity[i]+getResult("RawIntDen",a);
+    Actin_intensity_mean[i]=Actin_intensity_mean[i]+getResult("Mean",a);
+	}
+	Actin_intensity_mean[i]=Actin_intensity_mean[i]/nResults;
+	run("Clear Results");
+	
+	run("Close All");
+}
+
+run("Clear Results");
+
+
+
+for( i=0; i<filelist.length; i++){
+	setResult("title",i,title[i]);
+	setResult("IKB_total_intensity",i,total_ikb[i]);
+	setResult("IKB_mean_intensity",i,total_ikb_mean[i]);
+	
+	setResult("IKB_actin_filaments_intensity",i,filament_actin[i]);
+	setResult("IKB_actin_filaments_mean_intensity",i,filament_actin_mean[i]);
+	
+	setResult("IKB_actin_nodes_intensity",i,node_actin[i]);
+	setResult("IKB_actin_nodes_mean_intensity",i,node_actin_mean[i]);
+
+	setResult("IKB_nuclear_intensity",i,nuclear_actin[i]);
+	setResult("IKB_nuclear_mean_intensity",i,nuclear_actin_mean[i]);
+	
+	setResult("IKB_actin_all_intensity",i,all_actin[i]);
+	setResult("IKB_actin_all_mean_intensity",i,all_actin_mean[i]);
+
+	setResult("Number of Filaments",i,number_filaments[i]);
+	setResult("Filament area",i,area_filaments[i]);
+	setResult("Filament intensity_bg",i,Filament_intensity_bg[i]);
+	setResult("Filament intensity",i,Filament_intensity[i]);
+	setResult("Filament intensity_mean",i,Filament_intensity_mean[i]);
+	
+	setResult("Number of node",i,number_nodes[i]);
+	setResult("Node area",i,area_nodes[i]);
+	setResult("Node intensity_bg",i,Nodal_intensity_bg[i]);
+	setResult("Node intensity",i,Nodal_intensity[i]);
+	setResult("Node intensity_mean",i,Nodal_intensity_mean[i]);
+
+	setResult("Total Actin area",i,area_total_actin[i]);
+	setResult("All actin intensity_bg",i,Actin_intensity_bg[i]);
+	setResult("All actin intensity",i,Actin_intensity[i]);
+	setResult("All actin intensity_mean",i,Actin_intensity_mean[i]);
+	
+}
+dirName = File.getName(dir1); 
+namet=dirName+"grand_results.xls";
+saveAs("Results", dir2 +namet);
