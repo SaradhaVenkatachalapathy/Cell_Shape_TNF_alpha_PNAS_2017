@@ -20,7 +20,7 @@ Below is an example of filamentous and nodal actin structures as identified from
 </p>
 
 
-1. *iPI_PARP_PCNA_quantification.ijm* was used to calculate Floroscent signal per colony. 
+2. *iPI_PARP_PCNA_quantification.ijm* was used to calculate Floroscent signal per colony. 
 
 Our work is presented in this [scientific feature](https://mbi.nus.edu.sg/science-features/signaling-in-3d/).
 <br/>
