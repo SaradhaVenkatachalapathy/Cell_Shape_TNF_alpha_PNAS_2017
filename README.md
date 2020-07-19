@@ -8,7 +8,7 @@ In this repository, we share the scripts used to analyse the transciption profil
 
 <br/>
 <p align="center">
-<img src='/Expression_Analysis/TNF-alpha-transcription.jpeg' height='500' width='700'><br/>
+<img src='/Expression_Analysis/TNF-alpha-transcription.jpeg' height='300' width='400'><br/>
 </p>
 
 We also present scripts used for specific image processing tasks. 
@@ -16,7 +16,7 @@ We also present scripts used for specific image processing tasks.
 Below is an example of filamentous and nodal actin structures as identified from the original image by the algorithm. 
 <br/>
 <p align="center">
-<img src='/Image_Analysis/Actin_structures.png' height='200' width='400'><br/>
+<img src='/Image_Analysis/Actin_structures.png' height='150' width='400'><br/>
 </p>
 
 
